@@ -1,0 +1,13 @@
+[package]
+name = "agnt5-processor"
+description = "Durable workflow processor for AGNT5"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+agnt5-core.workspace = true
+

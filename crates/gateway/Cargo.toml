@@ -1,0 +1,13 @@
+[package]
+name = "agnt5-gateway"
+description = "HTTP and gRPC gateway for the AGNT5 community runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+agnt5-core.workspace = true
+

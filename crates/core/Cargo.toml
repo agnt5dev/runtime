@@ -1,0 +1,15 @@
+[package]
+name = "agnt5-core"
+description = "Stable contracts and domain types for the AGNT5 runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+bytes.workspace = true
+futures-core.workspace = true
+thiserror.workspace = true

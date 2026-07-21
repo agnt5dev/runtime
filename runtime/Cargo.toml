@@ -1,0 +1,22 @@
+[package]
+name = "agnt5-runtime"
+description = "Single-binary community runtime for durable AGNT5 workflows"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "agnt5-runtime"
+path = "src/main.rs"
+
+[dependencies]
+agnt5-core.workspace = true
+agnt5-postgres.workspace = true
+agnt5-processor.workspace = true
+agnt5-coordinator.workspace = true
+agnt5-gateway.workspace = true
+agnt5-telemetry.workspace = true
+tokio.workspace = true
