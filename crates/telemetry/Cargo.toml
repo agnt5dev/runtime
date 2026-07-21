@@ -1,0 +1,10 @@
+[package]
+name = "agnt5-telemetry"
+description = "OpenTelemetry configuration for AGNT5 Runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+

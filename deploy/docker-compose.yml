@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: agnt5
+      POSTGRES_USER: agnt5
+      POSTGRES_PASSWORD: agnt5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agnt5"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    ports:
+      - "5432:5432"
+    volumes:
+      - agnt5-postgres:/var/lib/postgresql/data
+
+  runtime:
+    build:
+      context: ..
+    environment:
+      AGNT5_DATABASE_URL: postgres://agnt5:agnt5@postgres:5432/agnt5
+      AGNT5_PROJECT_ID: default
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  agnt5-postgres:

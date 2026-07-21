@@ -1,0 +1,28 @@
+[package]
+name = "agnt5-postgres"
+description = "PostgreSQL journal and materialized storage for AGNT5"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+agnt5-core.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio-stream.workspace = true
+
+[features]
+integration-tests = []
+
+[[test]]
+name = "postgres"
+path = "tests/postgres.rs"
+required-features = ["integration-tests"]
