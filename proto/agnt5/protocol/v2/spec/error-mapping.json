@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "errors": [
+    {"proto_code":"PROTOCOL_ERROR_CODE_UNSPECIFIED","grpc_code":"INTERNAL","http_status":500,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_INVALID_EXECUTION_TOKEN","grpc_code":"UNAUTHENTICATED","http_status":401,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_STALE_EXECUTION_TOKEN","grpc_code":"ABORTED","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_STALE_WORKER_SESSION","grpc_code":"UNAUTHENTICATED","http_status":401,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_EXECUTION_SUPERSEDED","grpc_code":"ABORTED","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_INVALID_RUN_TRANSITION","grpc_code":"FAILED_PRECONDITION","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_WAIT_ALREADY_RESOLVED","grpc_code":"ALREADY_EXISTS","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_ALREADY_COMMITTED","grpc_code":"ALREADY_EXISTS","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_COMMIT_CONFLICT","grpc_code":"ABORTED","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_UNSUPPORTED_PROTOCOL","grpc_code":"UNIMPLEMENTED","http_status":426,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_MISSING_CAPABILITY","grpc_code":"FAILED_PRECONDITION","http_status":412,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_PAYLOAD_REFERENCE_EXPIRED","grpc_code":"FAILED_PRECONDITION","http_status":410,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_MESSAGE_TOO_LARGE","grpc_code":"RESOURCE_EXHAUSTED","http_status":413,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_MANIFEST_REVISION_MISMATCH","grpc_code":"ABORTED","http_status":409,"default_retryable":true},
+    {"proto_code":"PROTOCOL_ERROR_CODE_INVALID_REQUEST","grpc_code":"INVALID_ARGUMENT","http_status":400,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_UNAUTHENTICATED","grpc_code":"UNAUTHENTICATED","http_status":401,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_BACKPRESSURE","grpc_code":"RESOURCE_EXHAUSTED","http_status":429,"default_retryable":true},
+    {"proto_code":"PROTOCOL_ERROR_CODE_UNAVAILABLE","grpc_code":"UNAVAILABLE","http_status":503,"default_retryable":true},
+    {"proto_code":"PROTOCOL_ERROR_CODE_INVALID_DURABLE_OPERATION_TOKEN","grpc_code":"UNAUTHENTICATED","http_status":401,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_STALE_DURABLE_OPERATION_TOKEN","grpc_code":"ABORTED","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_STATE_REVISION_CONFLICT","grpc_code":"ABORTED","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_STATE_SCOPE_UNAVAILABLE","grpc_code":"FAILED_PRECONDITION","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_COMPONENT_DESCRIPTOR_CONFLICT","grpc_code":"ALREADY_EXISTS","http_status":409,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_EVENT_CURSOR_EXPIRED","grpc_code":"OUT_OF_RANGE","http_status":410,"default_retryable":false},
+    {"proto_code":"PROTOCOL_ERROR_CODE_OUTPUT_CURSOR_EXPIRED","grpc_code":"OUT_OF_RANGE","http_status":410,"default_retryable":false}
+  ]
+}

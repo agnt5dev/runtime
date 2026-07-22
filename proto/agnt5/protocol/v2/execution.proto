@@ -19,6 +19,7 @@ service ExecutionService {
   rpc SendSignal(SendSignalRequest) returns (SendSignalResponse);
   rpc ResolveWait(ResolveWaitRequest) returns (ResolveWaitResponse);
   rpc StreamRunEvents(StreamRunEventsRequest) returns (stream StreamRunEventsResponse);
+  rpc StreamRunOutput(StreamRunOutputRequest) returns (stream StreamRunOutputResponse);
 }
 
 message Run {
@@ -127,4 +128,22 @@ message StreamRunEventsResponse {
   string cursor = 2;
   DurableEvent event = 3;
   google.protobuf.Timestamp observed_at = 4;
+}
+
+message StreamRunOutputRequest {
+  string run_id = 1;
+  // Empty selects every output stream for the run.
+  string stream_id = 2;
+  // Opaque runtime cursor from a previously received output event. Because
+  // live output has bounded retention, an expired cursor returns
+  // PROTOCOL_ERROR_CODE_OUTPUT_CURSOR_EXPIRED.
+  string after_cursor = 3;
+}
+
+message StreamRunOutputResponse {
+  string run_id = 1;
+  string cursor = 2;
+  string stream_id = 3;
+  RunOutputEvent event = 4;
+  google.protobuf.Timestamp observed_at = 5;
 }

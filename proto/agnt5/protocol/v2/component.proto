@@ -39,11 +39,29 @@ message ComponentDescriptor {
   RunPolicy run_policy = 7;
   ExecutionDefaults execution_defaults = 8;
   repeated TriggerDescriptor triggers = 9;
+  // JSON Schema dialect URI used by the component-level and method-level
+  // schema documents. The initial portable value is
+  // "https://json-schema.org/draft/2020-12/schema".
+  string schema_dialect = 10;
+  // ENTITY methods must be declared explicitly. Other component types leave
+  // this empty unless a negotiated capability defines method dispatch for
+  // that type.
+  repeated MethodDescriptor methods = 11;
+}
+
+message MethodDescriptor {
+  string name = 1;
+  bytes input_schema_json = 2;
+  bytes output_schema_json = 3;
+  // Non-secret, application-defined annotations.
+  map<string, string> metadata = 4;
 }
 
 message ComponentTarget {
   ComponentType type = 1;
   string name = 2;
+  // Exact registered component version. Portable v2 requests do not use an
+  // implicit "latest" version; SDK conveniences must resolve one first.
   string version = 3;
   string method = 4;
   // Application-visible key for a stateful component instance. ENTITY targets

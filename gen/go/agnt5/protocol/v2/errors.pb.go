@@ -51,6 +51,8 @@ const (
 	ProtocolErrorCode_PROTOCOL_ERROR_CODE_STATE_REVISION_CONFLICT         ProtocolErrorCode = 20
 	ProtocolErrorCode_PROTOCOL_ERROR_CODE_STATE_SCOPE_UNAVAILABLE         ProtocolErrorCode = 21
 	ProtocolErrorCode_PROTOCOL_ERROR_CODE_COMPONENT_DESCRIPTOR_CONFLICT   ProtocolErrorCode = 22
+	ProtocolErrorCode_PROTOCOL_ERROR_CODE_EVENT_CURSOR_EXPIRED            ProtocolErrorCode = 23
+	ProtocolErrorCode_PROTOCOL_ERROR_CODE_OUTPUT_CURSOR_EXPIRED           ProtocolErrorCode = 24
 )
 
 // Enum value maps for ProtocolErrorCode.
@@ -79,6 +81,8 @@ var (
 		20: "PROTOCOL_ERROR_CODE_STATE_REVISION_CONFLICT",
 		21: "PROTOCOL_ERROR_CODE_STATE_SCOPE_UNAVAILABLE",
 		22: "PROTOCOL_ERROR_CODE_COMPONENT_DESCRIPTOR_CONFLICT",
+		23: "PROTOCOL_ERROR_CODE_EVENT_CURSOR_EXPIRED",
+		24: "PROTOCOL_ERROR_CODE_OUTPUT_CURSOR_EXPIRED",
 	}
 	ProtocolErrorCode_value = map[string]int32{
 		"PROTOCOL_ERROR_CODE_UNSPECIFIED":                     0,
@@ -104,6 +108,8 @@ var (
 		"PROTOCOL_ERROR_CODE_STATE_REVISION_CONFLICT":         20,
 		"PROTOCOL_ERROR_CODE_STATE_SCOPE_UNAVAILABLE":         21,
 		"PROTOCOL_ERROR_CODE_COMPONENT_DESCRIPTOR_CONFLICT":   22,
+		"PROTOCOL_ERROR_CODE_EVENT_CURSOR_EXPIRED":            23,
+		"PROTOCOL_ERROR_CODE_OUTPUT_CURSOR_EXPIRED":           24,
 	}
 )
 
@@ -224,7 +230,7 @@ const file_agnt5_protocol_v2_errors_proto_rawDesc = "" +
 	"\adetails\x18\x05 \x03(\v2-.agnt5.protocol.v2.ProtocolError.DetailsEntryR\adetails\x1a:\n" +
 	"\fDetailsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\xb9\b\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x96\t\n" +
 	"\x11ProtocolErrorCode\x12#\n" +
 	"\x1fPROTOCOL_ERROR_CODE_UNSPECIFIED\x10\x00\x12/\n" +
 	"+PROTOCOL_ERROR_CODE_INVALID_EXECUTION_TOKEN\x10\x01\x12-\n" +
@@ -249,7 +255,9 @@ const file_agnt5_protocol_v2_errors_proto_rawDesc = "" +
 	"1PROTOCOL_ERROR_CODE_STALE_DURABLE_OPERATION_TOKEN\x10\x13\x12/\n" +
 	"+PROTOCOL_ERROR_CODE_STATE_REVISION_CONFLICT\x10\x14\x12/\n" +
 	"+PROTOCOL_ERROR_CODE_STATE_SCOPE_UNAVAILABLE\x10\x15\x125\n" +
-	"1PROTOCOL_ERROR_CODE_COMPONENT_DESCRIPTOR_CONFLICT\x10\x16BAZ?github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2b\x06proto3"
+	"1PROTOCOL_ERROR_CODE_COMPONENT_DESCRIPTOR_CONFLICT\x10\x16\x12,\n" +
+	"(PROTOCOL_ERROR_CODE_EVENT_CURSOR_EXPIRED\x10\x17\x12-\n" +
+	")PROTOCOL_ERROR_CODE_OUTPUT_CURSOR_EXPIRED\x10\x18BAZ?github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2b\x06proto3"
 
 var (
 	file_agnt5_protocol_v2_errors_proto_rawDescOnce sync.Once

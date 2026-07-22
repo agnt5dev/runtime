@@ -26,13 +26,25 @@ pub mod runtime {
 
 #[cfg(test)]
 mod tests {
-    use super::protocol::v2::{worker_service_client::WorkerServiceClient, ComponentDescriptor};
+    use super::protocol::v2::{
+        payload_service_client::PayloadServiceClient, worker_service_client::WorkerServiceClient,
+        ComponentDescriptor, MethodDescriptor,
+    };
 
     #[test]
     fn default_artifact_exports_public_descriptors_and_clients() {
-        let descriptor = ComponentDescriptor::default();
-        assert!(descriptor.name.is_empty());
+        let descriptor = ComponentDescriptor {
+            name: "cart".into(),
+            version: "v1".into(),
+            methods: vec![MethodDescriptor {
+                name: "add_item".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert_eq!(descriptor.methods[0].name, "add_item");
 
         let _: Option<WorkerServiceClient<tonic::transport::Channel>> = None;
+        let _: Option<PayloadServiceClient<tonic::transport::Channel>> = None;
     }
 }

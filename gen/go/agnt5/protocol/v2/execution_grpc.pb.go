@@ -26,6 +26,7 @@ const (
 	ExecutionService_SendSignal_FullMethodName      = "/agnt5.protocol.v2.ExecutionService/SendSignal"
 	ExecutionService_ResolveWait_FullMethodName     = "/agnt5.protocol.v2.ExecutionService/ResolveWait"
 	ExecutionService_StreamRunEvents_FullMethodName = "/agnt5.protocol.v2.ExecutionService/StreamRunEvents"
+	ExecutionService_StreamRunOutput_FullMethodName = "/agnt5.protocol.v2.ExecutionService/StreamRunOutput"
 )
 
 // ExecutionServiceClient is the client API for ExecutionService service.
@@ -39,6 +40,7 @@ type ExecutionServiceClient interface {
 	SendSignal(ctx context.Context, in *SendSignalRequest, opts ...grpc.CallOption) (*SendSignalResponse, error)
 	ResolveWait(ctx context.Context, in *ResolveWaitRequest, opts ...grpc.CallOption) (*ResolveWaitResponse, error)
 	StreamRunEvents(ctx context.Context, in *StreamRunEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamRunEventsResponse], error)
+	StreamRunOutput(ctx context.Context, in *StreamRunOutputRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamRunOutputResponse], error)
 }
 
 type executionServiceClient struct {
@@ -128,6 +130,25 @@ func (c *executionServiceClient) StreamRunEvents(ctx context.Context, in *Stream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ExecutionService_StreamRunEventsClient = grpc.ServerStreamingClient[StreamRunEventsResponse]
 
+func (c *executionServiceClient) StreamRunOutput(ctx context.Context, in *StreamRunOutputRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamRunOutputResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ExecutionService_ServiceDesc.Streams[1], ExecutionService_StreamRunOutput_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamRunOutputRequest, StreamRunOutputResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExecutionService_StreamRunOutputClient = grpc.ServerStreamingClient[StreamRunOutputResponse]
+
 // ExecutionServiceServer is the server API for ExecutionService service.
 // All implementations must embed UnimplementedExecutionServiceServer
 // for forward compatibility.
@@ -139,6 +160,7 @@ type ExecutionServiceServer interface {
 	SendSignal(context.Context, *SendSignalRequest) (*SendSignalResponse, error)
 	ResolveWait(context.Context, *ResolveWaitRequest) (*ResolveWaitResponse, error)
 	StreamRunEvents(*StreamRunEventsRequest, grpc.ServerStreamingServer[StreamRunEventsResponse]) error
+	StreamRunOutput(*StreamRunOutputRequest, grpc.ServerStreamingServer[StreamRunOutputResponse]) error
 	mustEmbedUnimplementedExecutionServiceServer()
 }
 
@@ -169,6 +191,9 @@ func (UnimplementedExecutionServiceServer) ResolveWait(context.Context, *Resolve
 }
 func (UnimplementedExecutionServiceServer) StreamRunEvents(*StreamRunEventsRequest, grpc.ServerStreamingServer[StreamRunEventsResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamRunEvents not implemented")
+}
+func (UnimplementedExecutionServiceServer) StreamRunOutput(*StreamRunOutputRequest, grpc.ServerStreamingServer[StreamRunOutputResponse]) error {
+	return status.Error(codes.Unimplemented, "method StreamRunOutput not implemented")
 }
 func (UnimplementedExecutionServiceServer) mustEmbedUnimplementedExecutionServiceServer() {}
 func (UnimplementedExecutionServiceServer) testEmbeddedByValue()                          {}
@@ -310,6 +335,17 @@ func _ExecutionService_StreamRunEvents_Handler(srv interface{}, stream grpc.Serv
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ExecutionService_StreamRunEventsServer = grpc.ServerStreamingServer[StreamRunEventsResponse]
 
+func _ExecutionService_StreamRunOutput_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamRunOutputRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ExecutionServiceServer).StreamRunOutput(m, &grpc.GenericServerStream[StreamRunOutputRequest, StreamRunOutputResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExecutionService_StreamRunOutputServer = grpc.ServerStreamingServer[StreamRunOutputResponse]
+
 // ExecutionService_ServiceDesc is the grpc.ServiceDesc for ExecutionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -346,6 +382,11 @@ var ExecutionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamRunEvents",
 			Handler:       _ExecutionService_StreamRunEvents_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamRunOutput",
+			Handler:       _ExecutionService_StreamRunOutput_Handler,
 			ServerStreams: true,
 		},
 	},

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "protocol_package": "agnt5.protocol.v2",
+  "wire_version": {
+    "major": 2,
+    "minor": 0
+  },
+  "stability": "alpha",
+  "json_mapping": "proto3-preserve-field-names",
+  "transports": [
+    "grpc",
+    "http-json",
+    "sse",
+    "endpoint-http-json"
+  ],
+  "component_types": [
+    "FUNCTION",
+    "WORKFLOW",
+    "ENTITY",
+    "AGENT",
+    "TOOL",
+    "SCORER"
+  ],
+  "endpoint_signature_schemes": [
+    "agnt5-http-hmac-sha256.v1"
+  ],
+  "release_projections": {
+    "rust": "agnt5-proto",
+    "go": "github.com/agnt5dev/runtime/gen/go",
+    "descriptor": "FileDescriptorSet"
+  },
+  "registries": {
+    "capabilities": "capabilities.json",
+    "errors": "error-mapping.json"
+  },
+  "lock_schema": "protocol-lock.schema.json",
+  "legacy_packages": [
+    "api.v1"
+  ]
+}

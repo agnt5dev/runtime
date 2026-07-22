@@ -47,6 +47,9 @@ message ExecuteRunRequest {
   bytes effective_run_policy_digest = 13;
   // Persisted application identity inherited from StartRunRequest.
   ApplicationContext application_context = 14;
+  // Highest run-wide durable-operation sequence incorporated into checkpoint.
+  // SDK replay begins at the next sequence.
+  uint64 checkpoint_through_operation_sequence = 15;
 }
 
 message RenewRunLeaseRequest {
@@ -127,6 +130,8 @@ message RunSuspended {
   Payload checkpoint = 2;
   WaitCondition wait_condition = 3;
   map<string, string> metadata = 4;
+  // Highest run-wide durable-operation sequence incorporated into checkpoint.
+  uint64 checkpoint_through_operation_sequence = 5;
 }
 
 message WaitCondition {
@@ -175,6 +180,8 @@ message RunYielded {
   string reason = 1;
   Payload checkpoint = 2;
   map<string, string> metadata = 3;
+  // Highest run-wide durable-operation sequence incorporated into checkpoint.
+  uint64 checkpoint_through_operation_sequence = 4;
 }
 
 // RunOutcome describes how one execution slice ended. Completion and

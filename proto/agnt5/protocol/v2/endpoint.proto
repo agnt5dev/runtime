@@ -80,6 +80,9 @@ message InvokeEndpointRequest {
   bytes effective_run_policy_digest = 14;
   // Persisted application identity inherited from StartRunRequest.
   ApplicationContext application_context = 15;
+  // Highest run-wide durable-operation sequence already incorporated into
+  // checkpoint. replay_results contains only later accepted results.
+  uint64 checkpoint_through_operation_sequence = 16;
 }
 
 message InvokeEndpointResponse {

@@ -27,7 +27,9 @@ const (
 type DurableOperation struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	OperationId string                 `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
-	Sequence    uint64                 `protobuf:"varint,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	// Run-wide deterministic history sequence. It starts at one and remains
+	// stable when an execution is replayed or resumed from a checkpoint.
+	Sequence uint64 `protobuf:"varint,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	// Types that are valid to be assigned to Kind:
 	//
 	//	*DurableOperation_Step

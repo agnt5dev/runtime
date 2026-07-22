@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/common.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// PayloadService transfers values that exceed the negotiated inline limit
+// without exposing object-store URLs or provider-specific credentials.
+service PayloadService {
+  rpc PutPayload(stream PutPayloadRequest) returns (PutPayloadResponse);
+  rpc GetPayload(GetPayloadRequest) returns (stream GetPayloadResponse);
+}
+
+// The first PutPayloadRequest frame must contain metadata exactly once. Data
+// frames then cover [0, size_bytes) contiguously in ascending offset order.
+// Retrying the complete stream with the same request_id and identical metadata
+// and bytes returns the original reference; different content is a conflict.
+message PutPayloadRequest {
+  oneof frame {
+    PutPayloadMetadata metadata = 1;
+    PayloadChunk chunk = 2;
+  }
+}
+
+message PutPayloadMetadata {
+  string request_id = 1;
+  string content_type = 2;
+  string content_encoding = 3;
+  uint64 size_bytes = 4;
+  bytes sha256 = 5;
+  // The runtime may cap this value. A zero duration requests the runtime's
+  // default retention period.
+  google.protobuf.Duration minimum_ttl = 6;
+}
+
+message PayloadChunk {
+  uint64 offset = 1;
+  bytes data = 2;
+}
+
+message PutPayloadResponse {
+  // body is always reference. The remaining Payload fields are canonicalized
+  // from the accepted transfer.
+  Payload payload = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message GetPayloadRequest {
+  PayloadReference reference = 1;
+  // Inclusive byte offset. Zero starts from the beginning.
+  uint64 offset = 2;
+  // Zero reads through the end of the payload.
+  uint64 length = 3;
+}
+
+// The first response frame contains metadata exactly once, followed by
+// contiguous chunks. Stream completion marks the end of the requested range.
+message GetPayloadResponse {
+  oneof frame {
+    PayloadTransferMetadata metadata = 1;
+    PayloadChunk chunk = 2;
+  }
+}
+
+message PayloadTransferMetadata {
+  string content_type = 1;
+  string content_encoding = 2;
+  uint64 size_bytes = 3;
+  bytes sha256 = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}

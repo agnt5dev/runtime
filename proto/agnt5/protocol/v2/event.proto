@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+service EventService {
+  rpc PublishEvent(PublishEventRequest) returns (PublishEventResponse);
+}
+
+// TriggerEvent is the portable envelope evaluated by EventTrigger. event_id is
+// the idempotency identity within the authenticated application boundary.
+message TriggerEvent {
+  string event_id = 1;
+  string event_name = 2;
+  Payload payload = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  TraceContext trace_context = 5;
+  map<string, string> metadata = 6;
+}
+
+message PublishEventRequest {
+  TriggerEvent event = 1;
+}
+
+enum EventDisposition {
+  EVENT_DISPOSITION_UNSPECIFIED = 0;
+  EVENT_DISPOSITION_ACCEPTED = 1;
+  EVENT_DISPOSITION_ALREADY_APPLIED = 2;
+}
+
+message PublishEventResponse {
+  EventDisposition disposition = 1;
+  google.protobuf.Timestamp accepted_at = 2;
+}
