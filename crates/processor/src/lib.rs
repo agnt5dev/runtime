@@ -115,6 +115,23 @@ impl<S: Segment, M: MaterializedStore> Processor<S, M> {
                     }
                 }
             }
+            RuntimeEvent::JobReclaimed {
+                worker_id,
+                previous_lease_id,
+                lease_id,
+                lease_expires_at_ms,
+                ..
+            } => {
+                if let Some(run) = state.as_mut() {
+                    if run.status == "running"
+                        && run.lease_id.as_deref() == Some(&previous_lease_id)
+                    {
+                        run.worker_id = Some(worker_id);
+                        run.lease_id = Some(lease_id);
+                        run.lease_expires_at_ms = Some(lease_expires_at_ms);
+                    }
+                }
+            }
             RuntimeEvent::JobLeaseRenewed {
                 lease_id,
                 lease_expires_at_ms,

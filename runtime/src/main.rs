@@ -6,6 +6,8 @@ use agnt5_postgres::{PostgresConfig, PostgresMaterializedStore, PostgresSegment,
 use agnt5_processor::Processor;
 use agnt5_proto::api::v1::engine_service_server::EngineServiceServer;
 use agnt5_proto::api::v1::execution_engine_service_server::ExecutionEngineServiceServer;
+use agnt5_proto::protocol::v2::protocol_service_server::ProtocolServiceServer;
+use agnt5_proto::protocol::v2::worker_service_server::WorkerServiceServer;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -39,13 +41,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::clone(&segment),
         Arc::clone(&store),
     );
-    let coordinator = Coordinator::new(identity.project_id.clone(), segment, store);
+    let coordinator = Arc::new(Coordinator::new(
+        identity.project_id.clone(),
+        segment,
+        store,
+    ));
     let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
 
     info!(version = env!("CARGO_PKG_VERSION"), project_id = %identity.project_id, %http_addr, %grpc_addr, "runtime started");
     let http = axum::serve(http_listener, http_router);
     let grpc = tonic::transport::Server::builder()
-        .add_service(EngineServiceServer::new(coordinator))
+        .add_service(EngineServiceServer::from_arc(Arc::clone(&coordinator)))
+        .add_service(ProtocolServiceServer::from_arc(Arc::clone(&coordinator)))
+        .add_service(WorkerServiceServer::from_arc(coordinator))
         .add_service(ExecutionEngineServiceServer::new(CheckpointService))
         .serve(grpc_addr);
 

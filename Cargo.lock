@@ -10,6 +10,7 @@ dependencies = [
  "agnt5-processor",
  "agnt5-proto",
  "bytes",
+ "prost-types",
  "serde_json",
  "tokio",
  "tonic",
@@ -45,8 +46,10 @@ dependencies = [
 name = "agnt5-postgres"
 version = "0.1.0-alpha.2"
 dependencies = [
+ "agnt5-coordinator",
  "agnt5-core",
  "agnt5-processor",
+ "agnt5-proto",
  "async-stream",
  "async-trait",
  "bytes",
@@ -54,6 +57,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-stream",
+ "tonic",
 ]
 
 [[package]]
