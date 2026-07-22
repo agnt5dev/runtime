@@ -18,6 +18,14 @@ pub enum RuntimeEvent {
         lease_id: String,
         lease_expires_at_ms: i64,
     },
+    JobReclaimed {
+        project_id: String,
+        run_id: String,
+        worker_id: String,
+        previous_lease_id: String,
+        lease_id: String,
+        lease_expires_at_ms: i64,
+    },
     JobLeaseRenewed {
         project_id: String,
         run_id: String,
@@ -46,6 +54,7 @@ impl RuntimeEvent {
         match self {
             Self::RunQueued { run_id, .. }
             | Self::JobClaimed { run_id, .. }
+            | Self::JobReclaimed { run_id, .. }
             | Self::JobLeaseRenewed { run_id, .. }
             | Self::JobCompleted { run_id, .. }
             | Self::JobFailed { run_id, .. } => run_id,

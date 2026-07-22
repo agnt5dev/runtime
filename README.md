@@ -58,6 +58,14 @@ The first workflow slice implements:
 - worker registration, polling, lease renewal, and completion through
   `api.v1.EngineService`
 
+The runtime also serves the first `agnt5.protocol.v2` bridge beside the legacy
+worker API. This bridge implements protocol negotiation, worker registration
+and session fencing, idempotent `PollRun`, lease renewal and expiry-driven
+redelivery, and idempotent completed or failed outcomes. It advertises no
+optional capabilities yet. Durable event append, live output streaming,
+referenced payloads, atomic final events, and cancelled, suspended, or yielded
+outcomes return `UNIMPLEMENTED` until their journal projections land.
+
 Authentication is not enabled in this first slice. JWT validation is the next
 gateway boundary; it will remain authentication-only and will not introduce
 roles or permissions.
