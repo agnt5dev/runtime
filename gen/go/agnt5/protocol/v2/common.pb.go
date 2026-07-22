@@ -256,8 +256,8 @@ func (*Payload_Reference) isPayload_Body() {}
 
 type PayloadReference struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Opaque, integrity-protected token issued by the runtime. Consumers must
-	// not parse it or persist assumptions about its encoding.
+	// Opaque, integrity-protected bearer capability issued by the runtime.
+	// Consumers must not parse, log, or persist assumptions about its encoding.
 	Token         []byte `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

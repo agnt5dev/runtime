@@ -991,6 +991,146 @@ func (x *StreamRunEventsResponse) GetObservedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+type StreamRunOutputRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	RunId string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// Empty selects every output stream for the run.
+	StreamId string `protobuf:"bytes,2,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	// Opaque runtime cursor from a previously received output event. Because
+	// live output has bounded retention, an expired cursor returns
+	// PROTOCOL_ERROR_CODE_OUTPUT_CURSOR_EXPIRED.
+	AfterCursor   string `protobuf:"bytes,3,opt,name=after_cursor,json=afterCursor,proto3" json:"after_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamRunOutputRequest) Reset() {
+	*x = StreamRunOutputRequest{}
+	mi := &file_agnt5_protocol_v2_execution_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamRunOutputRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamRunOutputRequest) ProtoMessage() {}
+
+func (x *StreamRunOutputRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agnt5_protocol_v2_execution_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamRunOutputRequest.ProtoReflect.Descriptor instead.
+func (*StreamRunOutputRequest) Descriptor() ([]byte, []int) {
+	return file_agnt5_protocol_v2_execution_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *StreamRunOutputRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *StreamRunOutputRequest) GetStreamId() string {
+	if x != nil {
+		return x.StreamId
+	}
+	return ""
+}
+
+func (x *StreamRunOutputRequest) GetAfterCursor() string {
+	if x != nil {
+		return x.AfterCursor
+	}
+	return ""
+}
+
+type StreamRunOutputResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Cursor        string                 `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	StreamId      string                 `protobuf:"bytes,3,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	Event         *RunOutputEvent        `protobuf:"bytes,4,opt,name=event,proto3" json:"event,omitempty"`
+	ObservedAt    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamRunOutputResponse) Reset() {
+	*x = StreamRunOutputResponse{}
+	mi := &file_agnt5_protocol_v2_execution_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamRunOutputResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamRunOutputResponse) ProtoMessage() {}
+
+func (x *StreamRunOutputResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agnt5_protocol_v2_execution_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamRunOutputResponse.ProtoReflect.Descriptor instead.
+func (*StreamRunOutputResponse) Descriptor() ([]byte, []int) {
+	return file_agnt5_protocol_v2_execution_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *StreamRunOutputResponse) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *StreamRunOutputResponse) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *StreamRunOutputResponse) GetStreamId() string {
+	if x != nil {
+		return x.StreamId
+	}
+	return ""
+}
+
+func (x *StreamRunOutputResponse) GetEvent() *RunOutputEvent {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
+func (x *StreamRunOutputResponse) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
 var File_agnt5_protocol_v2_execution_proto protoreflect.FileDescriptor
 
 const file_agnt5_protocol_v2_execution_proto_rawDesc = "" +
@@ -1069,11 +1209,22 @@ const file_agnt5_protocol_v2_execution_proto_rawDesc = "" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\x125\n" +
 	"\x05event\x18\x03 \x01(\v2\x1f.agnt5.protocol.v2.DurableEventR\x05event\x12;\n" +
 	"\vobserved_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\"o\n" +
+	"\x16StreamRunOutputRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1b\n" +
+	"\tstream_id\x18\x02 \x01(\tR\bstreamId\x12!\n" +
+	"\fafter_cursor\x18\x03 \x01(\tR\vafterCursor\"\xdb\x01\n" +
+	"\x17StreamRunOutputResponse\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x16\n" +
+	"\x06cursor\x18\x02 \x01(\tR\x06cursor\x12\x1b\n" +
+	"\tstream_id\x18\x03 \x01(\tR\bstreamId\x127\n" +
+	"\x05event\x18\x04 \x01(\v2!.agnt5.protocol.v2.RunOutputEventR\x05event\x12;\n" +
+	"\vobserved_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"observedAt*\x84\x01\n" +
 	"\x12CommandDisposition\x12#\n" +
 	"\x1fCOMMAND_DISPOSITION_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cCOMMAND_DISPOSITION_ACCEPTED\x10\x01\x12'\n" +
-	"#COMMAND_DISPOSITION_ALREADY_APPLIED\x10\x022\x97\x05\n" +
+	"#COMMAND_DISPOSITION_ALREADY_APPLIED\x10\x022\x83\x06\n" +
 	"\x10ExecutionService\x12S\n" +
 	"\bStartRun\x12\".agnt5.protocol.v2.StartRunRequest\x1a#.agnt5.protocol.v2.StartRunResponse\x12M\n" +
 	"\x06GetRun\x12 .agnt5.protocol.v2.GetRunRequest\x1a!.agnt5.protocol.v2.GetRunResponse\x12b\n" +
@@ -1082,7 +1233,8 @@ const file_agnt5_protocol_v2_execution_proto_rawDesc = "" +
 	"\n" +
 	"SendSignal\x12$.agnt5.protocol.v2.SendSignalRequest\x1a%.agnt5.protocol.v2.SendSignalResponse\x12\\\n" +
 	"\vResolveWait\x12%.agnt5.protocol.v2.ResolveWaitRequest\x1a&.agnt5.protocol.v2.ResolveWaitResponse\x12j\n" +
-	"\x0fStreamRunEvents\x12).agnt5.protocol.v2.StreamRunEventsRequest\x1a*.agnt5.protocol.v2.StreamRunEventsResponse0\x01BAZ?github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2b\x06proto3"
+	"\x0fStreamRunEvents\x12).agnt5.protocol.v2.StreamRunEventsRequest\x1a*.agnt5.protocol.v2.StreamRunEventsResponse0\x01\x12j\n" +
+	"\x0fStreamRunOutput\x12).agnt5.protocol.v2.StreamRunOutputRequest\x1a*.agnt5.protocol.v2.StreamRunOutputResponse0\x01BAZ?github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2b\x06proto3"
 
 var (
 	file_agnt5_protocol_v2_execution_proto_rawDescOnce sync.Once
@@ -1097,7 +1249,7 @@ func file_agnt5_protocol_v2_execution_proto_rawDescGZIP() []byte {
 }
 
 var file_agnt5_protocol_v2_execution_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agnt5_protocol_v2_execution_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_agnt5_protocol_v2_execution_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_agnt5_protocol_v2_execution_proto_goTypes = []any{
 	(CommandDisposition)(0),         // 0: agnt5.protocol.v2.CommandDisposition
 	(*Run)(nil),                     // 1: agnt5.protocol.v2.Run
@@ -1115,65 +1267,72 @@ var file_agnt5_protocol_v2_execution_proto_goTypes = []any{
 	(*ResolveWaitResponse)(nil),     // 13: agnt5.protocol.v2.ResolveWaitResponse
 	(*StreamRunEventsRequest)(nil),  // 14: agnt5.protocol.v2.StreamRunEventsRequest
 	(*StreamRunEventsResponse)(nil), // 15: agnt5.protocol.v2.StreamRunEventsResponse
-	nil,                             // 16: agnt5.protocol.v2.StartRunRequest.MetadataEntry
-	(*ComponentTarget)(nil),         // 17: agnt5.protocol.v2.ComponentTarget
-	(RunStatus)(0),                  // 18: agnt5.protocol.v2.RunStatus
-	(*timestamppb.Timestamp)(nil),   // 19: google.protobuf.Timestamp
-	(*Payload)(nil),                 // 20: agnt5.protocol.v2.Payload
-	(*RetryPolicy)(nil),             // 21: agnt5.protocol.v2.RetryPolicy
-	(*durationpb.Duration)(nil),     // 22: google.protobuf.Duration
-	(*TraceContext)(nil),            // 23: agnt5.protocol.v2.TraceContext
-	(*ApplicationContext)(nil),      // 24: agnt5.protocol.v2.ApplicationContext
-	(*RunOutcome)(nil),              // 25: agnt5.protocol.v2.RunOutcome
-	(*DurableEvent)(nil),            // 26: agnt5.protocol.v2.DurableEvent
+	(*StreamRunOutputRequest)(nil),  // 16: agnt5.protocol.v2.StreamRunOutputRequest
+	(*StreamRunOutputResponse)(nil), // 17: agnt5.protocol.v2.StreamRunOutputResponse
+	nil,                             // 18: agnt5.protocol.v2.StartRunRequest.MetadataEntry
+	(*ComponentTarget)(nil),         // 19: agnt5.protocol.v2.ComponentTarget
+	(RunStatus)(0),                  // 20: agnt5.protocol.v2.RunStatus
+	(*timestamppb.Timestamp)(nil),   // 21: google.protobuf.Timestamp
+	(*Payload)(nil),                 // 22: agnt5.protocol.v2.Payload
+	(*RetryPolicy)(nil),             // 23: agnt5.protocol.v2.RetryPolicy
+	(*durationpb.Duration)(nil),     // 24: google.protobuf.Duration
+	(*TraceContext)(nil),            // 25: agnt5.protocol.v2.TraceContext
+	(*ApplicationContext)(nil),      // 26: agnt5.protocol.v2.ApplicationContext
+	(*RunOutcome)(nil),              // 27: agnt5.protocol.v2.RunOutcome
+	(*DurableEvent)(nil),            // 28: agnt5.protocol.v2.DurableEvent
+	(*RunOutputEvent)(nil),          // 29: agnt5.protocol.v2.RunOutputEvent
 }
 var file_agnt5_protocol_v2_execution_proto_depIdxs = []int32{
-	17, // 0: agnt5.protocol.v2.Run.target:type_name -> agnt5.protocol.v2.ComponentTarget
-	18, // 1: agnt5.protocol.v2.Run.status:type_name -> agnt5.protocol.v2.RunStatus
-	19, // 2: agnt5.protocol.v2.Run.created_at:type_name -> google.protobuf.Timestamp
-	19, // 3: agnt5.protocol.v2.Run.updated_at:type_name -> google.protobuf.Timestamp
-	19, // 4: agnt5.protocol.v2.Run.completed_at:type_name -> google.protobuf.Timestamp
-	17, // 5: agnt5.protocol.v2.StartRunRequest.target:type_name -> agnt5.protocol.v2.ComponentTarget
-	20, // 6: agnt5.protocol.v2.StartRunRequest.input:type_name -> agnt5.protocol.v2.Payload
-	21, // 7: agnt5.protocol.v2.StartRunRequest.retry_policy:type_name -> agnt5.protocol.v2.RetryPolicy
-	22, // 8: agnt5.protocol.v2.StartRunRequest.run_timeout:type_name -> google.protobuf.Duration
-	23, // 9: agnt5.protocol.v2.StartRunRequest.trace_context:type_name -> agnt5.protocol.v2.TraceContext
-	16, // 10: agnt5.protocol.v2.StartRunRequest.metadata:type_name -> agnt5.protocol.v2.StartRunRequest.MetadataEntry
-	24, // 11: agnt5.protocol.v2.StartRunRequest.application_context:type_name -> agnt5.protocol.v2.ApplicationContext
-	22, // 12: agnt5.protocol.v2.StartRunRequest.execution_timeout:type_name -> google.protobuf.Duration
+	19, // 0: agnt5.protocol.v2.Run.target:type_name -> agnt5.protocol.v2.ComponentTarget
+	20, // 1: agnt5.protocol.v2.Run.status:type_name -> agnt5.protocol.v2.RunStatus
+	21, // 2: agnt5.protocol.v2.Run.created_at:type_name -> google.protobuf.Timestamp
+	21, // 3: agnt5.protocol.v2.Run.updated_at:type_name -> google.protobuf.Timestamp
+	21, // 4: agnt5.protocol.v2.Run.completed_at:type_name -> google.protobuf.Timestamp
+	19, // 5: agnt5.protocol.v2.StartRunRequest.target:type_name -> agnt5.protocol.v2.ComponentTarget
+	22, // 6: agnt5.protocol.v2.StartRunRequest.input:type_name -> agnt5.protocol.v2.Payload
+	23, // 7: agnt5.protocol.v2.StartRunRequest.retry_policy:type_name -> agnt5.protocol.v2.RetryPolicy
+	24, // 8: agnt5.protocol.v2.StartRunRequest.run_timeout:type_name -> google.protobuf.Duration
+	25, // 9: agnt5.protocol.v2.StartRunRequest.trace_context:type_name -> agnt5.protocol.v2.TraceContext
+	18, // 10: agnt5.protocol.v2.StartRunRequest.metadata:type_name -> agnt5.protocol.v2.StartRunRequest.MetadataEntry
+	26, // 11: agnt5.protocol.v2.StartRunRequest.application_context:type_name -> agnt5.protocol.v2.ApplicationContext
+	24, // 12: agnt5.protocol.v2.StartRunRequest.execution_timeout:type_name -> google.protobuf.Duration
 	1,  // 13: agnt5.protocol.v2.StartRunResponse.run:type_name -> agnt5.protocol.v2.Run
 	1,  // 14: agnt5.protocol.v2.GetRunResponse.run:type_name -> agnt5.protocol.v2.Run
 	1,  // 15: agnt5.protocol.v2.GetRunOutcomeResponse.run:type_name -> agnt5.protocol.v2.Run
-	25, // 16: agnt5.protocol.v2.GetRunOutcomeResponse.outcome:type_name -> agnt5.protocol.v2.RunOutcome
+	27, // 16: agnt5.protocol.v2.GetRunOutcomeResponse.outcome:type_name -> agnt5.protocol.v2.RunOutcome
 	0,  // 17: agnt5.protocol.v2.CancelRunResponse.disposition:type_name -> agnt5.protocol.v2.CommandDisposition
-	18, // 18: agnt5.protocol.v2.CancelRunResponse.run_status:type_name -> agnt5.protocol.v2.RunStatus
-	20, // 19: agnt5.protocol.v2.SendSignalRequest.payload:type_name -> agnt5.protocol.v2.Payload
+	20, // 18: agnt5.protocol.v2.CancelRunResponse.run_status:type_name -> agnt5.protocol.v2.RunStatus
+	22, // 19: agnt5.protocol.v2.SendSignalRequest.payload:type_name -> agnt5.protocol.v2.Payload
 	0,  // 20: agnt5.protocol.v2.SendSignalResponse.disposition:type_name -> agnt5.protocol.v2.CommandDisposition
-	18, // 21: agnt5.protocol.v2.SendSignalResponse.run_status:type_name -> agnt5.protocol.v2.RunStatus
-	20, // 22: agnt5.protocol.v2.ResolveWaitRequest.response:type_name -> agnt5.protocol.v2.Payload
+	20, // 21: agnt5.protocol.v2.SendSignalResponse.run_status:type_name -> agnt5.protocol.v2.RunStatus
+	22, // 22: agnt5.protocol.v2.ResolveWaitRequest.response:type_name -> agnt5.protocol.v2.Payload
 	0,  // 23: agnt5.protocol.v2.ResolveWaitResponse.disposition:type_name -> agnt5.protocol.v2.CommandDisposition
-	18, // 24: agnt5.protocol.v2.ResolveWaitResponse.run_status:type_name -> agnt5.protocol.v2.RunStatus
-	26, // 25: agnt5.protocol.v2.StreamRunEventsResponse.event:type_name -> agnt5.protocol.v2.DurableEvent
-	19, // 26: agnt5.protocol.v2.StreamRunEventsResponse.observed_at:type_name -> google.protobuf.Timestamp
-	2,  // 27: agnt5.protocol.v2.ExecutionService.StartRun:input_type -> agnt5.protocol.v2.StartRunRequest
-	4,  // 28: agnt5.protocol.v2.ExecutionService.GetRun:input_type -> agnt5.protocol.v2.GetRunRequest
-	6,  // 29: agnt5.protocol.v2.ExecutionService.GetRunOutcome:input_type -> agnt5.protocol.v2.GetRunOutcomeRequest
-	8,  // 30: agnt5.protocol.v2.ExecutionService.CancelRun:input_type -> agnt5.protocol.v2.CancelRunRequest
-	10, // 31: agnt5.protocol.v2.ExecutionService.SendSignal:input_type -> agnt5.protocol.v2.SendSignalRequest
-	12, // 32: agnt5.protocol.v2.ExecutionService.ResolveWait:input_type -> agnt5.protocol.v2.ResolveWaitRequest
-	14, // 33: agnt5.protocol.v2.ExecutionService.StreamRunEvents:input_type -> agnt5.protocol.v2.StreamRunEventsRequest
-	3,  // 34: agnt5.protocol.v2.ExecutionService.StartRun:output_type -> agnt5.protocol.v2.StartRunResponse
-	5,  // 35: agnt5.protocol.v2.ExecutionService.GetRun:output_type -> agnt5.protocol.v2.GetRunResponse
-	7,  // 36: agnt5.protocol.v2.ExecutionService.GetRunOutcome:output_type -> agnt5.protocol.v2.GetRunOutcomeResponse
-	9,  // 37: agnt5.protocol.v2.ExecutionService.CancelRun:output_type -> agnt5.protocol.v2.CancelRunResponse
-	11, // 38: agnt5.protocol.v2.ExecutionService.SendSignal:output_type -> agnt5.protocol.v2.SendSignalResponse
-	13, // 39: agnt5.protocol.v2.ExecutionService.ResolveWait:output_type -> agnt5.protocol.v2.ResolveWaitResponse
-	15, // 40: agnt5.protocol.v2.ExecutionService.StreamRunEvents:output_type -> agnt5.protocol.v2.StreamRunEventsResponse
-	34, // [34:41] is the sub-list for method output_type
-	27, // [27:34] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	20, // 24: agnt5.protocol.v2.ResolveWaitResponse.run_status:type_name -> agnt5.protocol.v2.RunStatus
+	28, // 25: agnt5.protocol.v2.StreamRunEventsResponse.event:type_name -> agnt5.protocol.v2.DurableEvent
+	21, // 26: agnt5.protocol.v2.StreamRunEventsResponse.observed_at:type_name -> google.protobuf.Timestamp
+	29, // 27: agnt5.protocol.v2.StreamRunOutputResponse.event:type_name -> agnt5.protocol.v2.RunOutputEvent
+	21, // 28: agnt5.protocol.v2.StreamRunOutputResponse.observed_at:type_name -> google.protobuf.Timestamp
+	2,  // 29: agnt5.protocol.v2.ExecutionService.StartRun:input_type -> agnt5.protocol.v2.StartRunRequest
+	4,  // 30: agnt5.protocol.v2.ExecutionService.GetRun:input_type -> agnt5.protocol.v2.GetRunRequest
+	6,  // 31: agnt5.protocol.v2.ExecutionService.GetRunOutcome:input_type -> agnt5.protocol.v2.GetRunOutcomeRequest
+	8,  // 32: agnt5.protocol.v2.ExecutionService.CancelRun:input_type -> agnt5.protocol.v2.CancelRunRequest
+	10, // 33: agnt5.protocol.v2.ExecutionService.SendSignal:input_type -> agnt5.protocol.v2.SendSignalRequest
+	12, // 34: agnt5.protocol.v2.ExecutionService.ResolveWait:input_type -> agnt5.protocol.v2.ResolveWaitRequest
+	14, // 35: agnt5.protocol.v2.ExecutionService.StreamRunEvents:input_type -> agnt5.protocol.v2.StreamRunEventsRequest
+	16, // 36: agnt5.protocol.v2.ExecutionService.StreamRunOutput:input_type -> agnt5.protocol.v2.StreamRunOutputRequest
+	3,  // 37: agnt5.protocol.v2.ExecutionService.StartRun:output_type -> agnt5.protocol.v2.StartRunResponse
+	5,  // 38: agnt5.protocol.v2.ExecutionService.GetRun:output_type -> agnt5.protocol.v2.GetRunResponse
+	7,  // 39: agnt5.protocol.v2.ExecutionService.GetRunOutcome:output_type -> agnt5.protocol.v2.GetRunOutcomeResponse
+	9,  // 40: agnt5.protocol.v2.ExecutionService.CancelRun:output_type -> agnt5.protocol.v2.CancelRunResponse
+	11, // 41: agnt5.protocol.v2.ExecutionService.SendSignal:output_type -> agnt5.protocol.v2.SendSignalResponse
+	13, // 42: agnt5.protocol.v2.ExecutionService.ResolveWait:output_type -> agnt5.protocol.v2.ResolveWaitResponse
+	15, // 43: agnt5.protocol.v2.ExecutionService.StreamRunEvents:output_type -> agnt5.protocol.v2.StreamRunEventsResponse
+	17, // 44: agnt5.protocol.v2.ExecutionService.StreamRunOutput:output_type -> agnt5.protocol.v2.StreamRunOutputResponse
+	37, // [37:45] is the sub-list for method output_type
+	29, // [29:37] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_agnt5_protocol_v2_execution_proto_init() }
@@ -1191,7 +1350,7 @@ func file_agnt5_protocol_v2_execution_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agnt5_protocol_v2_execution_proto_rawDesc), len(file_agnt5_protocol_v2_execution_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

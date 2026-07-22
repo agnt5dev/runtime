@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-proto"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "prost",
  "prost-types",

@@ -19,6 +19,8 @@ service DurableService {
 // RPCs, or an endpoint response, but their semantics and identity are shared.
 message DurableOperation {
   string operation_id = 1;
+  // Run-wide deterministic history sequence. It starts at one and remains
+  // stable when an execution is replayed or resumed from a checkpoint.
   uint64 sequence = 2;
 
   oneof kind {

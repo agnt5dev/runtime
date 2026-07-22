@@ -1,7 +1,9 @@
 [package]
 name = "agnt5-proto"
 description = "SDK-compatible protobuf contract for AGNT5 Runtime"
-version.workspace = true
+# Protocol artifacts version independently from the runtime binary. One value
+# is shared by the Rust crate, nested Go module tag, descriptor, and lock.
+version = "0.1.0-alpha.3"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true

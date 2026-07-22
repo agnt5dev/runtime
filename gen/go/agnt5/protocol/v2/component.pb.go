@@ -104,8 +104,16 @@ type ComponentDescriptor struct {
 	RunPolicy         *RunPolicy           `protobuf:"bytes,7,opt,name=run_policy,json=runPolicy,proto3" json:"run_policy,omitempty"`
 	ExecutionDefaults *ExecutionDefaults   `protobuf:"bytes,8,opt,name=execution_defaults,json=executionDefaults,proto3" json:"execution_defaults,omitempty"`
 	Triggers          []*TriggerDescriptor `protobuf:"bytes,9,rep,name=triggers,proto3" json:"triggers,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// JSON Schema dialect URI used by the component-level and method-level
+	// schema documents. The initial portable value is
+	// "https://json-schema.org/draft/2020-12/schema".
+	SchemaDialect string `protobuf:"bytes,10,opt,name=schema_dialect,json=schemaDialect,proto3" json:"schema_dialect,omitempty"`
+	// ENTITY methods must be declared explicitly. Other component types leave
+	// this empty unless a negotiated capability defines method dispatch for
+	// that type.
+	Methods       []*MethodDescriptor `protobuf:"bytes,11,rep,name=methods,proto3" json:"methods,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ComponentDescriptor) Reset() {
@@ -201,12 +209,97 @@ func (x *ComponentDescriptor) GetTriggers() []*TriggerDescriptor {
 	return nil
 }
 
+func (x *ComponentDescriptor) GetSchemaDialect() string {
+	if x != nil {
+		return x.SchemaDialect
+	}
+	return ""
+}
+
+func (x *ComponentDescriptor) GetMethods() []*MethodDescriptor {
+	if x != nil {
+		return x.Methods
+	}
+	return nil
+}
+
+type MethodDescriptor struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Name             string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	InputSchemaJson  []byte                 `protobuf:"bytes,2,opt,name=input_schema_json,json=inputSchemaJson,proto3" json:"input_schema_json,omitempty"`
+	OutputSchemaJson []byte                 `protobuf:"bytes,3,opt,name=output_schema_json,json=outputSchemaJson,proto3" json:"output_schema_json,omitempty"`
+	// Non-secret, application-defined annotations.
+	Metadata      map[string]string `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MethodDescriptor) Reset() {
+	*x = MethodDescriptor{}
+	mi := &file_agnt5_protocol_v2_component_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MethodDescriptor) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MethodDescriptor) ProtoMessage() {}
+
+func (x *MethodDescriptor) ProtoReflect() protoreflect.Message {
+	mi := &file_agnt5_protocol_v2_component_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MethodDescriptor.ProtoReflect.Descriptor instead.
+func (*MethodDescriptor) Descriptor() ([]byte, []int) {
+	return file_agnt5_protocol_v2_component_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MethodDescriptor) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *MethodDescriptor) GetInputSchemaJson() []byte {
+	if x != nil {
+		return x.InputSchemaJson
+	}
+	return nil
+}
+
+func (x *MethodDescriptor) GetOutputSchemaJson() []byte {
+	if x != nil {
+		return x.OutputSchemaJson
+	}
+	return nil
+}
+
+func (x *MethodDescriptor) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
 type ComponentTarget struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	Type    ComponentType          `protobuf:"varint,1,opt,name=type,proto3,enum=agnt5.protocol.v2.ComponentType" json:"type,omitempty"`
-	Name    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Version string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
-	Method  string                 `protobuf:"bytes,4,opt,name=method,proto3" json:"method,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Type  ComponentType          `protobuf:"varint,1,opt,name=type,proto3,enum=agnt5.protocol.v2.ComponentType" json:"type,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Exact registered component version. Portable v2 requests do not use an
+	// implicit "latest" version; SDK conveniences must resolve one first.
+	Version string `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	Method  string `protobuf:"bytes,4,opt,name=method,proto3" json:"method,omitempty"`
 	// Application-visible key for a stateful component instance. ENTITY targets
 	// require it; other types leave it empty unless a negotiated capability
 	// defines their keyed semantics.
@@ -217,7 +310,7 @@ type ComponentTarget struct {
 
 func (x *ComponentTarget) Reset() {
 	*x = ComponentTarget{}
-	mi := &file_agnt5_protocol_v2_component_proto_msgTypes[1]
+	mi := &file_agnt5_protocol_v2_component_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -229,7 +322,7 @@ func (x *ComponentTarget) String() string {
 func (*ComponentTarget) ProtoMessage() {}
 
 func (x *ComponentTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_agnt5_protocol_v2_component_proto_msgTypes[1]
+	mi := &file_agnt5_protocol_v2_component_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -242,7 +335,7 @@ func (x *ComponentTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComponentTarget.ProtoReflect.Descriptor instead.
 func (*ComponentTarget) Descriptor() ([]byte, []int) {
-	return file_agnt5_protocol_v2_component_proto_rawDescGZIP(), []int{1}
+	return file_agnt5_protocol_v2_component_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ComponentTarget) GetType() ComponentType {
@@ -284,7 +377,7 @@ var File_agnt5_protocol_v2_component_proto protoreflect.FileDescriptor
 
 const file_agnt5_protocol_v2_component_proto_rawDesc = "" +
 	"\n" +
-	"!agnt5/protocol/v2/component.proto\x12\x11agnt5.protocol.v2\x1a)agnt5/protocol/v2/execution_options.proto\x1a\"agnt5/protocol/v2/run_policy.proto\x1a\x1fagnt5/protocol/v2/trigger.proto\"\xb6\x04\n" +
+	"!agnt5/protocol/v2/component.proto\x12\x11agnt5.protocol.v2\x1a)agnt5/protocol/v2/execution_options.proto\x1a\"agnt5/protocol/v2/run_policy.proto\x1a\x1fagnt5/protocol/v2/trigger.proto\"\x9c\x05\n" +
 	"\x13ComponentDescriptor\x124\n" +
 	"\x04type\x18\x01 \x01(\x0e2 .agnt5.protocol.v2.ComponentTypeR\x04type\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -295,7 +388,18 @@ const file_agnt5_protocol_v2_component_proto_rawDesc = "" +
 	"\n" +
 	"run_policy\x18\a \x01(\v2\x1c.agnt5.protocol.v2.RunPolicyR\trunPolicy\x12S\n" +
 	"\x12execution_defaults\x18\b \x01(\v2$.agnt5.protocol.v2.ExecutionDefaultsR\x11executionDefaults\x12@\n" +
-	"\btriggers\x18\t \x03(\v2$.agnt5.protocol.v2.TriggerDescriptorR\btriggers\x1a;\n" +
+	"\btriggers\x18\t \x03(\v2$.agnt5.protocol.v2.TriggerDescriptorR\btriggers\x12%\n" +
+	"\x0eschema_dialect\x18\n" +
+	" \x01(\tR\rschemaDialect\x12=\n" +
+	"\amethods\x18\v \x03(\v2#.agnt5.protocol.v2.MethodDescriptorR\amethods\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8c\x02\n" +
+	"\x10MethodDescriptor\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12*\n" +
+	"\x11input_schema_json\x18\x02 \x01(\fR\x0finputSchemaJson\x12,\n" +
+	"\x12output_schema_json\x18\x03 \x01(\fR\x10outputSchemaJson\x12M\n" +
+	"\bmetadata\x18\x04 \x03(\v21.agnt5.protocol.v2.MethodDescriptor.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb0\x01\n" +
@@ -327,28 +431,32 @@ func file_agnt5_protocol_v2_component_proto_rawDescGZIP() []byte {
 }
 
 var file_agnt5_protocol_v2_component_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agnt5_protocol_v2_component_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_agnt5_protocol_v2_component_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_agnt5_protocol_v2_component_proto_goTypes = []any{
 	(ComponentType)(0),          // 0: agnt5.protocol.v2.ComponentType
 	(*ComponentDescriptor)(nil), // 1: agnt5.protocol.v2.ComponentDescriptor
-	(*ComponentTarget)(nil),     // 2: agnt5.protocol.v2.ComponentTarget
-	nil,                         // 3: agnt5.protocol.v2.ComponentDescriptor.MetadataEntry
-	(*RunPolicy)(nil),           // 4: agnt5.protocol.v2.RunPolicy
-	(*ExecutionDefaults)(nil),   // 5: agnt5.protocol.v2.ExecutionDefaults
-	(*TriggerDescriptor)(nil),   // 6: agnt5.protocol.v2.TriggerDescriptor
+	(*MethodDescriptor)(nil),    // 2: agnt5.protocol.v2.MethodDescriptor
+	(*ComponentTarget)(nil),     // 3: agnt5.protocol.v2.ComponentTarget
+	nil,                         // 4: agnt5.protocol.v2.ComponentDescriptor.MetadataEntry
+	nil,                         // 5: agnt5.protocol.v2.MethodDescriptor.MetadataEntry
+	(*RunPolicy)(nil),           // 6: agnt5.protocol.v2.RunPolicy
+	(*ExecutionDefaults)(nil),   // 7: agnt5.protocol.v2.ExecutionDefaults
+	(*TriggerDescriptor)(nil),   // 8: agnt5.protocol.v2.TriggerDescriptor
 }
 var file_agnt5_protocol_v2_component_proto_depIdxs = []int32{
 	0, // 0: agnt5.protocol.v2.ComponentDescriptor.type:type_name -> agnt5.protocol.v2.ComponentType
-	3, // 1: agnt5.protocol.v2.ComponentDescriptor.metadata:type_name -> agnt5.protocol.v2.ComponentDescriptor.MetadataEntry
-	4, // 2: agnt5.protocol.v2.ComponentDescriptor.run_policy:type_name -> agnt5.protocol.v2.RunPolicy
-	5, // 3: agnt5.protocol.v2.ComponentDescriptor.execution_defaults:type_name -> agnt5.protocol.v2.ExecutionDefaults
-	6, // 4: agnt5.protocol.v2.ComponentDescriptor.triggers:type_name -> agnt5.protocol.v2.TriggerDescriptor
-	0, // 5: agnt5.protocol.v2.ComponentTarget.type:type_name -> agnt5.protocol.v2.ComponentType
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	4, // 1: agnt5.protocol.v2.ComponentDescriptor.metadata:type_name -> agnt5.protocol.v2.ComponentDescriptor.MetadataEntry
+	6, // 2: agnt5.protocol.v2.ComponentDescriptor.run_policy:type_name -> agnt5.protocol.v2.RunPolicy
+	7, // 3: agnt5.protocol.v2.ComponentDescriptor.execution_defaults:type_name -> agnt5.protocol.v2.ExecutionDefaults
+	8, // 4: agnt5.protocol.v2.ComponentDescriptor.triggers:type_name -> agnt5.protocol.v2.TriggerDescriptor
+	2, // 5: agnt5.protocol.v2.ComponentDescriptor.methods:type_name -> agnt5.protocol.v2.MethodDescriptor
+	5, // 6: agnt5.protocol.v2.MethodDescriptor.metadata:type_name -> agnt5.protocol.v2.MethodDescriptor.MetadataEntry
+	0, // 7: agnt5.protocol.v2.ComponentTarget.type:type_name -> agnt5.protocol.v2.ComponentType
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_agnt5_protocol_v2_component_proto_init() }
@@ -365,7 +473,7 @@ func file_agnt5_protocol_v2_component_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agnt5_protocol_v2_component_proto_rawDesc), len(file_agnt5_protocol_v2_component_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

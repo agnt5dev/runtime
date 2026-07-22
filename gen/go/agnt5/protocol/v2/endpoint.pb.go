@@ -235,8 +235,11 @@ type InvokeEndpointRequest struct {
 	EffectiveRunPolicyDigest []byte `protobuf:"bytes,14,opt,name=effective_run_policy_digest,json=effectiveRunPolicyDigest,proto3" json:"effective_run_policy_digest,omitempty"`
 	// Persisted application identity inherited from StartRunRequest.
 	ApplicationContext *ApplicationContext `protobuf:"bytes,15,opt,name=application_context,json=applicationContext,proto3" json:"application_context,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Highest run-wide durable-operation sequence already incorporated into
+	// checkpoint. replay_results contains only later accepted results.
+	CheckpointThroughOperationSequence uint64 `protobuf:"varint,16,opt,name=checkpoint_through_operation_sequence,json=checkpointThroughOperationSequence,proto3" json:"checkpoint_through_operation_sequence,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *InvokeEndpointRequest) Reset() {
@@ -374,6 +377,13 @@ func (x *InvokeEndpointRequest) GetApplicationContext() *ApplicationContext {
 	return nil
 }
 
+func (x *InvokeEndpointRequest) GetCheckpointThroughOperationSequence() uint64 {
+	if x != nil {
+		return x.CheckpointThroughOperationSequence
+	}
+	return 0
+}
+
 type InvokeEndpointResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Events are durably appended by the runtime as part of accepting this
@@ -472,7 +482,7 @@ const file_agnt5_protocol_v2_endpoint_proto_rawDesc = "" +
 	"\x0fExecutionBudget\x126\n" +
 	"\bdeadline\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12K\n" +
 	"\x14yield_before_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x12yieldBeforeTimeout\x12#\n" +
-	"\rmaximum_steps\x18\x03 \x01(\rR\fmaximumSteps\"\xce\a\n" +
+	"\rmaximum_steps\x18\x03 \x01(\rR\fmaximumSteps\"\xa1\b\n" +
 	"\x15InvokeEndpointRequest\x12>\n" +
 	"\bprotocol\x18\x01 \x01(\v2\".agnt5.protocol.v2.ProtocolVersionR\bprotocol\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x15\n" +
@@ -491,7 +501,8 @@ const file_agnt5_protocol_v2_endpoint_proto_rawDesc = "" +
 	"\x0ereplay_results\x18\f \x03(\v2).agnt5.protocol.v2.DurableOperationResultR\rreplayResults\x12N\n" +
 	"\x14effective_run_policy\x18\r \x01(\v2\x1c.agnt5.protocol.v2.RunPolicyR\x12effectiveRunPolicy\x12=\n" +
 	"\x1beffective_run_policy_digest\x18\x0e \x01(\fR\x18effectiveRunPolicyDigest\x12V\n" +
-	"\x13application_context\x18\x0f \x01(\v2%.agnt5.protocol.v2.ApplicationContextR\x12applicationContext\x1a;\n" +
+	"\x13application_context\x18\x0f \x01(\v2%.agnt5.protocol.v2.ApplicationContextR\x12applicationContext\x12Q\n" +
+	"%checkpoint_through_operation_sequence\x18\x10 \x01(\x04R\"checkpointThroughOperationSequence\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc0\x02\n" +

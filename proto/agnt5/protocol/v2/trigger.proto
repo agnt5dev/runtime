@@ -29,6 +29,9 @@ message EventTrigger {
   // Optional expression producing a non-negative delay before the run becomes
   // eligible. It does not create a public queue resource.
   TriggerExpression delay = 5;
+  // Positive bound for a batch. It is required when batch_window is present
+  // and prevents an event burst from creating an unbounded mapped input.
+  uint32 maximum_batch_size = 6;
 }
 
 message CronSchedule {
@@ -52,6 +55,19 @@ message ScheduleTrigger {
     CronSchedule cron = 1;
     IntervalSchedule interval = 2;
   }
+  ScheduleMisfirePolicy misfire_policy = 3;
+  // Used only by CATCH_UP. Zero uses the runtime's advertised safe limit.
+  uint32 maximum_catch_up = 4;
+}
+
+enum ScheduleMisfirePolicy {
+  SCHEDULE_MISFIRE_POLICY_UNSPECIFIED = 0;
+  // Ignore occurrences whose scheduled instant passed while unavailable.
+  SCHEDULE_MISFIRE_POLICY_SKIP = 1;
+  // Start one run representing all missed occurrences.
+  SCHEDULE_MISFIRE_POLICY_FIRE_ONCE = 2;
+  // Start distinct runs for missed occurrences up to maximum_catch_up.
+  SCHEDULE_MISFIRE_POLICY_CATCH_UP = 3;
 }
 
 // TriggerDescriptor is a portable declaration, not a scheduler resource.

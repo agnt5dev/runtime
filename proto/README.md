@@ -27,6 +27,7 @@ buf lint
 buf build
 buf generate --template buf.gen.go.yaml
 (cd ../gen/go && go mod tidy && go test ./...)
+(cd .. && ./scripts/build-protocol-artifacts.sh)
 ```
 
 SDK descriptor generation must select only `agnt5/protocol/v2`. The community
@@ -53,7 +54,8 @@ A protocol release uses one semantic version for all public projections:
 - crates.io package `agnt5-proto` at `<version>`;
 - Go module tag `gen/go/v<version>`; and
 - GitHub release tag `protocol/v<version>` containing the canonical descriptor
-  set and its SHA-256 digest.
+  set, dependency lock, behavioral specifications, registries, conformance
+  fixtures, and SHA-256 manifest.
 
 Only a `protocol/v<version>` tag on a commit already reachable from `main` can
 start `.github/workflows/protocol-release.yml`. The workflow repeats all Buf,

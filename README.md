@@ -78,14 +78,14 @@ changes do not rebuild the full Rust dependency graph.
 
 The canonical public schema is `proto/agnt5/protocol/v2`. After a protocol
 change is merged to `main`, create and push an annotated tag whose version
-matches the workspace version:
+matches the `agnt5-proto` version in `proto/Cargo.toml`:
 
 ```bash
-git tag -a protocol/v0.1.0-alpha.2 -m "Protocol v0.1.0-alpha.2"
-git push origin protocol/v0.1.0-alpha.2
+git tag -a protocol/v0.1.0-alpha.3 -m "Protocol v0.1.0-alpha.3"
+git push origin protocol/v0.1.0-alpha.3
 ```
 
 The protocol release workflow publishes the matching `agnt5-proto` crate,
-creates `gen/go/v0.1.0-alpha.2`, and publishes a canonical descriptor set plus
-its SHA-256 digest. See `proto/README.md` for bootstrap and trusted-publishing
-configuration.
+creates `gen/go/v0.1.0-alpha.3`, and publishes the canonical descriptor,
+dependency lock, behavioral specifications, registries, fixtures, and SHA-256
+manifest. See `proto/README.md` for bootstrap and trusted-publishing configuration.

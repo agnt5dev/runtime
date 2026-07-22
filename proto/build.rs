@@ -5,11 +5,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // downstream SDK builds must not depend on the runtime workspace layout.
     let mut protos = vec![
         "agnt5/protocol/v2/common.proto",
+        "agnt5/protocol/v2/payload.proto",
         "agnt5/protocol/v2/errors.proto",
         "agnt5/protocol/v2/capabilities.proto",
         "agnt5/protocol/v2/execution_options.proto",
         "agnt5/protocol/v2/run_policy.proto",
         "agnt5/protocol/v2/trigger.proto",
+        "agnt5/protocol/v2/event.proto",
         "agnt5/protocol/v2/component.proto",
         "agnt5/protocol/v2/state.proto",
         "agnt5/protocol/v2/dispatch.proto",

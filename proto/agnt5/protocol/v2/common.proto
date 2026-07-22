@@ -22,8 +22,8 @@ message Payload {
 }
 
 message PayloadReference {
-  // Opaque, integrity-protected token issued by the runtime. Consumers must
-  // not parse it or persist assumptions about its encoding.
+  // Opaque, integrity-protected bearer capability issued by the runtime.
+  // Consumers must not parse, log, or persist assumptions about its encoding.
   bytes token = 1;
 }
 

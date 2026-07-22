@@ -175,8 +175,11 @@ type ExecuteRunRequest struct {
 	EffectiveRunPolicyDigest []byte `protobuf:"bytes,13,opt,name=effective_run_policy_digest,json=effectiveRunPolicyDigest,proto3" json:"effective_run_policy_digest,omitempty"`
 	// Persisted application identity inherited from StartRunRequest.
 	ApplicationContext *ApplicationContext `protobuf:"bytes,14,opt,name=application_context,json=applicationContext,proto3" json:"application_context,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Highest run-wide durable-operation sequence incorporated into checkpoint.
+	// SDK replay begins at the next sequence.
+	CheckpointThroughOperationSequence uint64 `protobuf:"varint,15,opt,name=checkpoint_through_operation_sequence,json=checkpointThroughOperationSequence,proto3" json:"checkpoint_through_operation_sequence,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *ExecuteRunRequest) Reset() {
@@ -305,6 +308,13 @@ func (x *ExecuteRunRequest) GetApplicationContext() *ApplicationContext {
 		return x.ApplicationContext
 	}
 	return nil
+}
+
+func (x *ExecuteRunRequest) GetCheckpointThroughOperationSequence() uint64 {
+	if x != nil {
+		return x.CheckpointThroughOperationSequence
+	}
+	return 0
 }
 
 type RenewRunLeaseRequest struct {
@@ -966,8 +976,10 @@ type RunSuspended struct {
 	Checkpoint    *Payload               `protobuf:"bytes,2,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
 	WaitCondition *WaitCondition         `protobuf:"bytes,3,opt,name=wait_condition,json=waitCondition,proto3" json:"wait_condition,omitempty"`
 	Metadata      map[string]string      `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Highest run-wide durable-operation sequence incorporated into checkpoint.
+	CheckpointThroughOperationSequence uint64 `protobuf:"varint,5,opt,name=checkpoint_through_operation_sequence,json=checkpointThroughOperationSequence,proto3" json:"checkpoint_through_operation_sequence,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *RunSuspended) Reset() {
@@ -1026,6 +1038,13 @@ func (x *RunSuspended) GetMetadata() map[string]string {
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *RunSuspended) GetCheckpointThroughOperationSequence() uint64 {
+	if x != nil {
+		return x.CheckpointThroughOperationSequence
+	}
+	return 0
 }
 
 type WaitCondition struct {
@@ -1388,12 +1407,14 @@ func (x *UserInputOption) GetDescription() string {
 // before an endpoint host deadline. Unlike RunSuspended it does not
 // register a timer, signal, or user-input wait.
 type RunYielded struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
-	Checkpoint    *Payload               `protobuf:"bytes,2,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
-	Metadata      map[string]string      `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Reason     string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	Checkpoint *Payload               `protobuf:"bytes,2,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	Metadata   map[string]string      `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Highest run-wide durable-operation sequence incorporated into checkpoint.
+	CheckpointThroughOperationSequence uint64 `protobuf:"varint,4,opt,name=checkpoint_through_operation_sequence,json=checkpointThroughOperationSequence,proto3" json:"checkpoint_through_operation_sequence,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *RunYielded) Reset() {
@@ -1445,6 +1466,13 @@ func (x *RunYielded) GetMetadata() map[string]string {
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *RunYielded) GetCheckpointThroughOperationSequence() uint64 {
+	if x != nil {
+		return x.CheckpointThroughOperationSequence
+	}
+	return 0
 }
 
 // RunOutcome describes how one execution slice ended. Completion and
@@ -1733,7 +1761,7 @@ var File_agnt5_protocol_v2_dispatch_proto protoreflect.FileDescriptor
 
 const file_agnt5_protocol_v2_dispatch_proto_rawDesc = "" +
 	"\n" +
-	" agnt5/protocol/v2/dispatch.proto\x12\x11agnt5.protocol.v2\x1a\x1eagnt5/protocol/v2/common.proto\x1a!agnt5/protocol/v2/component.proto\x1a\"agnt5/protocol/v2/run_policy.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x82\a\n" +
+	" agnt5/protocol/v2/dispatch.proto\x12\x11agnt5.protocol.v2\x1a\x1eagnt5/protocol/v2/common.proto\x1a!agnt5/protocol/v2/component.proto\x1a\"agnt5/protocol/v2/run_policy.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd5\a\n" +
 	"\x11ExecuteRunRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12:\n" +
 	"\x06target\x18\x02 \x01(\v2\".agnt5.protocol.v2.ComponentTargetR\x06target\x120\n" +
@@ -1751,7 +1779,8 @@ const file_agnt5_protocol_v2_dispatch_proto_rawDesc = "" +
 	"\fexecution_id\x18\v \x01(\tR\vexecutionId\x12N\n" +
 	"\x14effective_run_policy\x18\f \x01(\v2\x1c.agnt5.protocol.v2.RunPolicyR\x12effectiveRunPolicy\x12=\n" +
 	"\x1beffective_run_policy_digest\x18\r \x01(\fR\x18effectiveRunPolicyDigest\x12V\n" +
-	"\x13application_context\x18\x0e \x01(\v2%.agnt5.protocol.v2.ApplicationContextR\x12applicationContext\x1a;\n" +
+	"\x13application_context\x18\x0e \x01(\v2%.agnt5.protocol.v2.ApplicationContextR\x12applicationContext\x12Q\n" +
+	"%checkpoint_through_operation_sequence\x18\x0f \x01(\x04R\"checkpointThroughOperationSequence\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"?\n" +
@@ -1812,14 +1841,15 @@ const file_agnt5_protocol_v2_dispatch_proto_rawDesc = "" +
 	"\bmetadata\x18\x02 \x03(\v2-.agnt5.protocol.v2.RunCancelled.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb3\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x03\n" +
 	"\fRunSuspended\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\x12:\n" +
 	"\n" +
 	"checkpoint\x18\x02 \x01(\v2\x1a.agnt5.protocol.v2.PayloadR\n" +
 	"checkpoint\x12G\n" +
 	"\x0ewait_condition\x18\x03 \x01(\v2 .agnt5.protocol.v2.WaitConditionR\rwaitCondition\x12I\n" +
-	"\bmetadata\x18\x04 \x03(\v2-.agnt5.protocol.v2.RunSuspended.MetadataEntryR\bmetadata\x1a;\n" +
+	"\bmetadata\x18\x04 \x03(\v2-.agnt5.protocol.v2.RunSuspended.MetadataEntryR\bmetadata\x12Q\n" +
+	"%checkpoint_through_operation_sequence\x18\x05 \x01(\x04R\"checkpointThroughOperationSequence\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe7\x01\n" +
@@ -1849,14 +1879,15 @@ const file_agnt5_protocol_v2_dispatch_proto_rawDesc = "" +
 	"\x0fUserInputOption\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xe6\x01\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xb9\x02\n" +
 	"\n" +
 	"RunYielded\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\x12:\n" +
 	"\n" +
 	"checkpoint\x18\x02 \x01(\v2\x1a.agnt5.protocol.v2.PayloadR\n" +
 	"checkpoint\x12G\n" +
-	"\bmetadata\x18\x03 \x03(\v2+.agnt5.protocol.v2.RunYielded.MetadataEntryR\bmetadata\x1a;\n" +
+	"\bmetadata\x18\x03 \x03(\v2+.agnt5.protocol.v2.RunYielded.MetadataEntryR\bmetadata\x12Q\n" +
+	"%checkpoint_through_operation_sequence\x18\x04 \x01(\x04R\"checkpointThroughOperationSequence\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd0\x02\n" +

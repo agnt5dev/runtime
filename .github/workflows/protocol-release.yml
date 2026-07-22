@@ -114,19 +114,9 @@ jobs:
         run: cargo package --locked -p agnt5-proto
 
       - name: Build canonical descriptor
-        working-directory: proto
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          mkdir -p ../dist/protocol
-          descriptor="agnt5-protocol-v${VERSION}.binpb"
-          buf build \
-            --path agnt5/protocol/v2 \
-            --as-file-descriptor-set \
-            --exclude-source-info \
-            -o "../dist/protocol/${descriptor}"
-          cd ../dist/protocol
-          sha256sum "${descriptor}" > "${descriptor}.sha256"
+        run: ./scripts/build-protocol-artifacts.sh "${VERSION}"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7.0.1
@@ -227,8 +217,8 @@ jobs:
 
       - name: Create GitHub protocol release
         run: |
-          descriptor="agnt5-protocol-v${VERSION}.binpb"
-          digest="$(cut -d ' ' -f 1 "dist/protocol/${descriptor}.sha256")"
+          lock="agnt5-protocol-v${VERSION}.lock.json"
+          digest="$(jq -r '.descriptor.sha256' "dist/protocol/${lock}")"
           notes="${RUNNER_TEMP}/protocol-release-notes.md"
           {
             echo "Canonical AGNT5 protocol v${VERSION}."
@@ -236,12 +226,13 @@ jobs:
             echo "- Rust crate: \`agnt5-proto ${VERSION}\`"
             echo "- Go module: \`github.com/agnt5dev/runtime/gen/go@v${VERSION}\`"
             echo "- Descriptor SHA-256: \`${digest}\`"
+            echo "- SDK dependency lock: \`${lock}\`"
             echo "- Source commit: \`${GITHUB_SHA}\`"
           } > "${notes}"
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             existing_assets="$(gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name')"
-            for file in "dist/protocol/${descriptor}" "dist/protocol/${descriptor}.sha256"; do
+            for file in dist/protocol/*; do
               if ! grep -Fxq "$(basename "${file}")" <<< "${existing_assets}"; then
                 gh release upload "${GITHUB_REF_NAME}" "${file}"
               fi
@@ -249,8 +240,7 @@ jobs:
           else
             release_args=(
               "${GITHUB_REF_NAME}"
-              "dist/protocol/${descriptor}"
-              "dist/protocol/${descriptor}.sha256"
+              dist/protocol/*
               --verify-tag
               --title "AGNT5 Protocol v${VERSION}"
               --notes-file "${notes}"

@@ -738,6 +738,7 @@ impl<S: Segment, M: MaterializedStore> WorkerService for Coordinator<S, M> {
                             effective_run_policy: None,
                             effective_run_policy_digest: Vec::new(),
                             application_context: None,
+                            checkpoint_through_operation_sequence: 0,
                         },
                     ))),
                 };
@@ -1129,8 +1130,10 @@ fn protocol_limits() -> ProtocolLimits {
     ProtocolLimits {
         maximum_message_bytes: 4 * 1024 * 1024,
         maximum_inline_payload_bytes: 1024 * 1024,
-        maximum_event_batch_bytes: 0,
-        maximum_events_per_batch: 0,
+        maximum_event_batch_bytes: 1024 * 1024,
+        maximum_events_per_batch: 1,
+        maximum_payload_bytes: 1024 * 1024,
+        maximum_payload_chunk_bytes: 1024 * 1024,
     }
 }
 

@@ -76,6 +76,9 @@ jobs:
             exit 1
           fi
 
+      - name: Validate canonical protocol artifacts
+        run: ./scripts/build-protocol-artifacts.sh
+
   verify:
     name: Rust checks and PostgreSQL tests
     runs-on: ubuntu-24.04

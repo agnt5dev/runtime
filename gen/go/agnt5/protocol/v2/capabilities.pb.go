@@ -197,8 +197,12 @@ type ProtocolLimits struct {
 	MaximumInlinePayloadBytes uint64                 `protobuf:"varint,2,opt,name=maximum_inline_payload_bytes,json=maximumInlinePayloadBytes,proto3" json:"maximum_inline_payload_bytes,omitempty"`
 	MaximumEventBatchBytes    uint64                 `protobuf:"varint,3,opt,name=maximum_event_batch_bytes,json=maximumEventBatchBytes,proto3" json:"maximum_event_batch_bytes,omitempty"`
 	MaximumEventsPerBatch     uint32                 `protobuf:"varint,4,opt,name=maximum_events_per_batch,json=maximumEventsPerBatch,proto3" json:"maximum_events_per_batch,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// Maximum uncompressed logical payload accepted through PayloadService.
+	MaximumPayloadBytes uint64 `protobuf:"varint,5,opt,name=maximum_payload_bytes,json=maximumPayloadBytes,proto3" json:"maximum_payload_bytes,omitempty"`
+	// Maximum data bytes in one streamed PayloadChunk.
+	MaximumPayloadChunkBytes uint64 `protobuf:"varint,6,opt,name=maximum_payload_chunk_bytes,json=maximumPayloadChunkBytes,proto3" json:"maximum_payload_chunk_bytes,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *ProtocolLimits) Reset() {
@@ -255,6 +259,20 @@ func (x *ProtocolLimits) GetMaximumEventBatchBytes() uint64 {
 func (x *ProtocolLimits) GetMaximumEventsPerBatch() uint32 {
 	if x != nil {
 		return x.MaximumEventsPerBatch
+	}
+	return 0
+}
+
+func (x *ProtocolLimits) GetMaximumPayloadBytes() uint64 {
+	if x != nil {
+		return x.MaximumPayloadBytes
+	}
+	return 0
+}
+
+func (x *ProtocolLimits) GetMaximumPayloadChunkBytes() uint64 {
+	if x != nil {
+		return x.MaximumPayloadChunkBytes
 	}
 	return 0
 }
@@ -410,12 +428,14 @@ const file_agnt5_protocol_v2_capabilities_proto_rawDesc = "" +
 	"\x15CapabilityRequirement\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12'\n" +
 	"\x0fminimum_version\x18\x02 \x01(\rR\x0eminimumVersion\x12\x1a\n" +
-	"\brequired\x18\x03 \x01(\bR\brequired\"\xf9\x01\n" +
+	"\brequired\x18\x03 \x01(\bR\brequired\"\xec\x02\n" +
 	"\x0eProtocolLimits\x122\n" +
 	"\x15maximum_message_bytes\x18\x01 \x01(\x04R\x13maximumMessageBytes\x12?\n" +
 	"\x1cmaximum_inline_payload_bytes\x18\x02 \x01(\x04R\x19maximumInlinePayloadBytes\x129\n" +
 	"\x19maximum_event_batch_bytes\x18\x03 \x01(\x04R\x16maximumEventBatchBytes\x127\n" +
-	"\x18maximum_events_per_batch\x18\x04 \x01(\rR\x15maximumEventsPerBatch\"\x84\x02\n" +
+	"\x18maximum_events_per_batch\x18\x04 \x01(\rR\x15maximumEventsPerBatch\x122\n" +
+	"\x15maximum_payload_bytes\x18\x05 \x01(\x04R\x13maximumPayloadBytes\x12=\n" +
+	"\x1bmaximum_payload_chunk_bytes\x18\x06 \x01(\x04R\x18maximumPayloadChunkBytes\"\x84\x02\n" +
 	"\x16GetCapabilitiesRequest\x12M\n" +
 	"\x10minimum_protocol\x18\x01 \x01(\v2\".agnt5.protocol.v2.ProtocolVersionR\x0fminimumProtocol\x12M\n" +
 	"\x10maximum_protocol\x18\x02 \x01(\v2\".agnt5.protocol.v2.ProtocolVersionR\x0fmaximumProtocol\x12L\n" +

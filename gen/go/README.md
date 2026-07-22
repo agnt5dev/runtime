@@ -12,4 +12,6 @@ buf generate --template buf.gen.go.yaml
 
 The module is released immutably and independently from the Go SDK. Consumers
 pin a released version of `github.com/agnt5dev/runtime/gen/go`; they do not
-copy the source protos or depend on the Rust `agnt5-proto` crate.
+copy the source protos or depend on the Rust `agnt5-proto` crate. SDK update
+pull requests also commit the protocol dependency lock from the matching
+GitHub release so descriptor and conformance-fixture digests remain auditable.

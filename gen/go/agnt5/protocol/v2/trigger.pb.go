@@ -23,6 +23,61 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ScheduleMisfirePolicy int32
+
+const (
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_UNSPECIFIED ScheduleMisfirePolicy = 0
+	// Ignore occurrences whose scheduled instant passed while unavailable.
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_SKIP ScheduleMisfirePolicy = 1
+	// Start one run representing all missed occurrences.
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_FIRE_ONCE ScheduleMisfirePolicy = 2
+	// Start distinct runs for missed occurrences up to maximum_catch_up.
+	ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_CATCH_UP ScheduleMisfirePolicy = 3
+)
+
+// Enum value maps for ScheduleMisfirePolicy.
+var (
+	ScheduleMisfirePolicy_name = map[int32]string{
+		0: "SCHEDULE_MISFIRE_POLICY_UNSPECIFIED",
+		1: "SCHEDULE_MISFIRE_POLICY_SKIP",
+		2: "SCHEDULE_MISFIRE_POLICY_FIRE_ONCE",
+		3: "SCHEDULE_MISFIRE_POLICY_CATCH_UP",
+	}
+	ScheduleMisfirePolicy_value = map[string]int32{
+		"SCHEDULE_MISFIRE_POLICY_UNSPECIFIED": 0,
+		"SCHEDULE_MISFIRE_POLICY_SKIP":        1,
+		"SCHEDULE_MISFIRE_POLICY_FIRE_ONCE":   2,
+		"SCHEDULE_MISFIRE_POLICY_CATCH_UP":    3,
+	}
+)
+
+func (x ScheduleMisfirePolicy) Enum() *ScheduleMisfirePolicy {
+	p := new(ScheduleMisfirePolicy)
+	*p = x
+	return p
+}
+
+func (x ScheduleMisfirePolicy) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ScheduleMisfirePolicy) Descriptor() protoreflect.EnumDescriptor {
+	return file_agnt5_protocol_v2_trigger_proto_enumTypes[0].Descriptor()
+}
+
+func (ScheduleMisfirePolicy) Type() protoreflect.EnumType {
+	return &file_agnt5_protocol_v2_trigger_proto_enumTypes[0]
+}
+
+func (x ScheduleMisfirePolicy) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ScheduleMisfirePolicy.Descriptor instead.
+func (ScheduleMisfirePolicy) EnumDescriptor() ([]byte, []int) {
+	return file_agnt5_protocol_v2_trigger_proto_rawDescGZIP(), []int{0}
+}
+
 // TriggerExpression never implies a runtime-specific expression evaluator.
 // language is a named, versioned dialect such as "cel.v1". A runtime must
 // reject a declaration when it did not negotiate support for that dialect.
@@ -92,9 +147,12 @@ type EventTrigger struct {
 	BatchWindow *durationpb.Duration `protobuf:"bytes,4,opt,name=batch_window,json=batchWindow,proto3" json:"batch_window,omitempty"`
 	// Optional expression producing a non-negative delay before the run becomes
 	// eligible. It does not create a public queue resource.
-	Delay         *TriggerExpression `protobuf:"bytes,5,opt,name=delay,proto3" json:"delay,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Delay *TriggerExpression `protobuf:"bytes,5,opt,name=delay,proto3" json:"delay,omitempty"`
+	// Positive bound for a batch. It is required when batch_window is present
+	// and prevents an event burst from creating an unbounded mapped input.
+	MaximumBatchSize uint32 `protobuf:"varint,6,opt,name=maximum_batch_size,json=maximumBatchSize,proto3" json:"maximum_batch_size,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *EventTrigger) Reset() {
@@ -160,6 +218,13 @@ func (x *EventTrigger) GetDelay() *TriggerExpression {
 		return x.Delay
 	}
 	return nil
+}
+
+func (x *EventTrigger) GetMaximumBatchSize() uint32 {
+	if x != nil {
+		return x.MaximumBatchSize
+	}
+	return 0
 }
 
 type CronSchedule struct {
@@ -286,8 +351,11 @@ type ScheduleTrigger struct {
 	//	*ScheduleTrigger_Cron
 	//	*ScheduleTrigger_Interval
 	Schedule      isScheduleTrigger_Schedule `protobuf_oneof:"schedule"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MisfirePolicy ScheduleMisfirePolicy      `protobuf:"varint,3,opt,name=misfire_policy,json=misfirePolicy,proto3,enum=agnt5.protocol.v2.ScheduleMisfirePolicy" json:"misfire_policy,omitempty"`
+	// Used only by CATCH_UP. Zero uses the runtime's advertised safe limit.
+	MaximumCatchUp uint32 `protobuf:"varint,4,opt,name=maximum_catch_up,json=maximumCatchUp,proto3" json:"maximum_catch_up,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ScheduleTrigger) Reset() {
@@ -343,6 +411,20 @@ func (x *ScheduleTrigger) GetInterval() *IntervalSchedule {
 		}
 	}
 	return nil
+}
+
+func (x *ScheduleTrigger) GetMisfirePolicy() ScheduleMisfirePolicy {
+	if x != nil {
+		return x.MisfirePolicy
+	}
+	return ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_UNSPECIFIED
+}
+
+func (x *ScheduleTrigger) GetMaximumCatchUp() uint32 {
+	if x != nil {
+		return x.MaximumCatchUp
+	}
+	return 0
 }
 
 type isScheduleTrigger_Schedule interface {
@@ -471,14 +553,15 @@ const file_agnt5_protocol_v2_trigger_proto_rawDesc = "" +
 	"\x1fagnt5/protocol/v2/trigger.proto\x12\x11agnt5.protocol.v2\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"G\n" +
 	"\x11TriggerExpression\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06source\"\xb0\x02\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\"\xde\x02\n" +
 	"\fEventTrigger\x12\x1d\n" +
 	"\n" +
 	"event_name\x18\x01 \x01(\tR\teventName\x12<\n" +
 	"\x06filter\x18\x02 \x01(\v2$.agnt5.protocol.v2.TriggerExpressionR\x06filter\x12I\n" +
 	"\rinput_mapping\x18\x03 \x01(\v2$.agnt5.protocol.v2.TriggerExpressionR\finputMapping\x12<\n" +
 	"\fbatch_window\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\vbatchWindow\x12:\n" +
-	"\x05delay\x18\x05 \x01(\v2$.agnt5.protocol.v2.TriggerExpressionR\x05delay\"c\n" +
+	"\x05delay\x18\x05 \x01(\v2$.agnt5.protocol.v2.TriggerExpressionR\x05delay\x12,\n" +
+	"\x12maximum_batch_size\x18\x06 \x01(\rR\x10maximumBatchSize\"c\n" +
 	"\fCronSchedule\x12\x1e\n" +
 	"\n" +
 	"expression\x18\x01 \x01(\tR\n" +
@@ -488,10 +571,12 @@ const file_agnt5_protocol_v2_trigger_proto_rawDesc = "" +
 	"\x10IntervalSchedule\x125\n" +
 	"\binterval\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12;\n" +
 	"\vanchor_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"anchorTime\"\x97\x01\n" +
+	"anchorTime\"\x92\x02\n" +
 	"\x0fScheduleTrigger\x125\n" +
 	"\x04cron\x18\x01 \x01(\v2\x1f.agnt5.protocol.v2.CronScheduleH\x00R\x04cron\x12A\n" +
-	"\binterval\x18\x02 \x01(\v2#.agnt5.protocol.v2.IntervalScheduleH\x00R\bintervalB\n" +
+	"\binterval\x18\x02 \x01(\v2#.agnt5.protocol.v2.IntervalScheduleH\x00R\binterval\x12O\n" +
+	"\x0emisfire_policy\x18\x03 \x01(\x0e2(.agnt5.protocol.v2.ScheduleMisfirePolicyR\rmisfirePolicy\x12(\n" +
+	"\x10maximum_catch_up\x18\x04 \x01(\rR\x0emaximumCatchUpB\n" +
 	"\n" +
 	"\bschedule\"\xc2\x02\n" +
 	"\x11TriggerDescriptor\x12\x1d\n" +
@@ -503,7 +588,12 @@ const file_agnt5_protocol_v2_trigger_proto_rawDesc = "" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x06\n" +
-	"\x04kindBAZ?github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2b\x06proto3"
+	"\x04kind*\xaf\x01\n" +
+	"\x15ScheduleMisfirePolicy\x12'\n" +
+	"#SCHEDULE_MISFIRE_POLICY_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cSCHEDULE_MISFIRE_POLICY_SKIP\x10\x01\x12%\n" +
+	"!SCHEDULE_MISFIRE_POLICY_FIRE_ONCE\x10\x02\x12$\n" +
+	" SCHEDULE_MISFIRE_POLICY_CATCH_UP\x10\x03BAZ?github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2b\x06proto3"
 
 var (
 	file_agnt5_protocol_v2_trigger_proto_rawDescOnce sync.Once
@@ -517,35 +607,38 @@ func file_agnt5_protocol_v2_trigger_proto_rawDescGZIP() []byte {
 	return file_agnt5_protocol_v2_trigger_proto_rawDescData
 }
 
+var file_agnt5_protocol_v2_trigger_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_agnt5_protocol_v2_trigger_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_agnt5_protocol_v2_trigger_proto_goTypes = []any{
-	(*TriggerExpression)(nil),     // 0: agnt5.protocol.v2.TriggerExpression
-	(*EventTrigger)(nil),          // 1: agnt5.protocol.v2.EventTrigger
-	(*CronSchedule)(nil),          // 2: agnt5.protocol.v2.CronSchedule
-	(*IntervalSchedule)(nil),      // 3: agnt5.protocol.v2.IntervalSchedule
-	(*ScheduleTrigger)(nil),       // 4: agnt5.protocol.v2.ScheduleTrigger
-	(*TriggerDescriptor)(nil),     // 5: agnt5.protocol.v2.TriggerDescriptor
-	nil,                           // 6: agnt5.protocol.v2.TriggerDescriptor.MetadataEntry
-	(*durationpb.Duration)(nil),   // 7: google.protobuf.Duration
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(ScheduleMisfirePolicy)(0),    // 0: agnt5.protocol.v2.ScheduleMisfirePolicy
+	(*TriggerExpression)(nil),     // 1: agnt5.protocol.v2.TriggerExpression
+	(*EventTrigger)(nil),          // 2: agnt5.protocol.v2.EventTrigger
+	(*CronSchedule)(nil),          // 3: agnt5.protocol.v2.CronSchedule
+	(*IntervalSchedule)(nil),      // 4: agnt5.protocol.v2.IntervalSchedule
+	(*ScheduleTrigger)(nil),       // 5: agnt5.protocol.v2.ScheduleTrigger
+	(*TriggerDescriptor)(nil),     // 6: agnt5.protocol.v2.TriggerDescriptor
+	nil,                           // 7: agnt5.protocol.v2.TriggerDescriptor.MetadataEntry
+	(*durationpb.Duration)(nil),   // 8: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
 }
 var file_agnt5_protocol_v2_trigger_proto_depIdxs = []int32{
-	0,  // 0: agnt5.protocol.v2.EventTrigger.filter:type_name -> agnt5.protocol.v2.TriggerExpression
-	0,  // 1: agnt5.protocol.v2.EventTrigger.input_mapping:type_name -> agnt5.protocol.v2.TriggerExpression
-	7,  // 2: agnt5.protocol.v2.EventTrigger.batch_window:type_name -> google.protobuf.Duration
-	0,  // 3: agnt5.protocol.v2.EventTrigger.delay:type_name -> agnt5.protocol.v2.TriggerExpression
-	7,  // 4: agnt5.protocol.v2.IntervalSchedule.interval:type_name -> google.protobuf.Duration
-	8,  // 5: agnt5.protocol.v2.IntervalSchedule.anchor_time:type_name -> google.protobuf.Timestamp
-	2,  // 6: agnt5.protocol.v2.ScheduleTrigger.cron:type_name -> agnt5.protocol.v2.CronSchedule
-	3,  // 7: agnt5.protocol.v2.ScheduleTrigger.interval:type_name -> agnt5.protocol.v2.IntervalSchedule
-	1,  // 8: agnt5.protocol.v2.TriggerDescriptor.event:type_name -> agnt5.protocol.v2.EventTrigger
-	4,  // 9: agnt5.protocol.v2.TriggerDescriptor.schedule:type_name -> agnt5.protocol.v2.ScheduleTrigger
-	6,  // 10: agnt5.protocol.v2.TriggerDescriptor.metadata:type_name -> agnt5.protocol.v2.TriggerDescriptor.MetadataEntry
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	1,  // 0: agnt5.protocol.v2.EventTrigger.filter:type_name -> agnt5.protocol.v2.TriggerExpression
+	1,  // 1: agnt5.protocol.v2.EventTrigger.input_mapping:type_name -> agnt5.protocol.v2.TriggerExpression
+	8,  // 2: agnt5.protocol.v2.EventTrigger.batch_window:type_name -> google.protobuf.Duration
+	1,  // 3: agnt5.protocol.v2.EventTrigger.delay:type_name -> agnt5.protocol.v2.TriggerExpression
+	8,  // 4: agnt5.protocol.v2.IntervalSchedule.interval:type_name -> google.protobuf.Duration
+	9,  // 5: agnt5.protocol.v2.IntervalSchedule.anchor_time:type_name -> google.protobuf.Timestamp
+	3,  // 6: agnt5.protocol.v2.ScheduleTrigger.cron:type_name -> agnt5.protocol.v2.CronSchedule
+	4,  // 7: agnt5.protocol.v2.ScheduleTrigger.interval:type_name -> agnt5.protocol.v2.IntervalSchedule
+	0,  // 8: agnt5.protocol.v2.ScheduleTrigger.misfire_policy:type_name -> agnt5.protocol.v2.ScheduleMisfirePolicy
+	2,  // 9: agnt5.protocol.v2.TriggerDescriptor.event:type_name -> agnt5.protocol.v2.EventTrigger
+	5,  // 10: agnt5.protocol.v2.TriggerDescriptor.schedule:type_name -> agnt5.protocol.v2.ScheduleTrigger
+	7,  // 11: agnt5.protocol.v2.TriggerDescriptor.metadata:type_name -> agnt5.protocol.v2.TriggerDescriptor.MetadataEntry
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_agnt5_protocol_v2_trigger_proto_init() }
@@ -566,13 +659,14 @@ func file_agnt5_protocol_v2_trigger_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agnt5_protocol_v2_trigger_proto_rawDesc), len(file_agnt5_protocol_v2_trigger_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_agnt5_protocol_v2_trigger_proto_goTypes,
 		DependencyIndexes: file_agnt5_protocol_v2_trigger_proto_depIdxs,
+		EnumInfos:         file_agnt5_protocol_v2_trigger_proto_enumTypes,
 		MessageInfos:      file_agnt5_protocol_v2_trigger_proto_msgTypes,
 	}.Build()
 	File_agnt5_protocol_v2_trigger_proto = out.File
