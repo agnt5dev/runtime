@@ -168,8 +168,9 @@ jobs:
       - name: Probe crates.io
         id: crates_io
         run: |
-          crate_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' https://crates.io/api/v1/crates/agnt5-proto)"
-          version_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "https://crates.io/api/v1/crates/agnt5-proto/${VERSION}")"
+          user_agent="agnt5-runtime-protocol-release/${VERSION} (+https://github.com/agnt5dev/runtime)"
+          crate_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --user-agent "${user_agent}" https://crates.io/api/v1/crates/agnt5-proto)"
+          version_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --user-agent "${user_agent}" "https://crates.io/api/v1/crates/agnt5-proto/${VERSION}")"
 
           case "${crate_status}" in
             200) echo "crate_exists=true" >> "${GITHUB_OUTPUT}" ;;

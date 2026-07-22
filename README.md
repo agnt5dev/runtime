@@ -73,11 +73,11 @@ change is merged to `main`, create and push an annotated tag whose version
 matches the workspace version:
 
 ```bash
-git tag -a protocol/v0.1.0-alpha.1 -m "Protocol v0.1.0-alpha.1"
-git push origin protocol/v0.1.0-alpha.1
+git tag -a protocol/v0.1.0-alpha.2 -m "Protocol v0.1.0-alpha.2"
+git push origin protocol/v0.1.0-alpha.2
 ```
 
 The protocol release workflow publishes the matching `agnt5-proto` crate,
-creates `gen/go/v0.1.0-alpha.1`, and publishes a canonical descriptor set plus
+creates `gen/go/v0.1.0-alpha.2`, and publishes a canonical descriptor set plus
 its SHA-256 digest. See `proto/README.md` for bootstrap and trusted-publishing
 configuration.
