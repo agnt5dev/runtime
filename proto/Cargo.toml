@@ -7,6 +7,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/agnt5-proto"
+keywords = ["agents", "workflow", "protobuf", "grpc", "durable"]
+categories = ["api-bindings", "network-programming"]
 publish = ["crates-io"]
 include = [
     "agnt5/**",

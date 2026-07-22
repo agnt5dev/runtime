@@ -65,3 +65,19 @@ roles or permissions.
 GitHub Actions caches Cargo dependencies and build outputs between runs. The
 container build uses `cargo-chef` plus BuildKit's GitHub Actions cache so source
 changes do not rebuild the full Rust dependency graph.
+
+## Protocol releases
+
+The canonical public schema is `proto/agnt5/protocol/v2`. After a protocol
+change is merged to `main`, create and push an annotated tag whose version
+matches the workspace version:
+
+```bash
+git tag -a protocol/v0.1.0-alpha.1 -m "Protocol v0.1.0-alpha.1"
+git push origin protocol/v0.1.0-alpha.1
+```
+
+The protocol release workflow publishes the matching `agnt5-proto` crate,
+creates `gen/go/v0.1.0-alpha.1`, and publishes a canonical descriptor set plus
+its SHA-256 digest. See `proto/README.md` for bootstrap and trusted-publishing
+configuration.

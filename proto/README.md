@@ -45,3 +45,25 @@ file declares the same stable Go import path. Generation deliberately excludes
 
 The generated module is a release projection, not another schema owner. CI
 regenerates it with pinned plugin versions and rejects drift.
+
+## Releases
+
+A protocol release uses one semantic version for all public projections:
+
+- crates.io package `agnt5-proto` at `<version>`;
+- Go module tag `gen/go/v<version>`; and
+- GitHub release tag `protocol/v<version>` containing the canonical descriptor
+  set and its SHA-256 digest.
+
+Only a `protocol/v<version>` tag on a commit already reachable from `main` can
+start `.github/workflows/protocol-release.yml`. The workflow repeats all Buf,
+Go, package, and compatibility checks before publishing. It then publishes the
+Rust crate, creates the matching immutable nested Go tag, and attaches the
+descriptor artifacts to the GitHub release.
+
+The first crates.io release requires a short-lived repository-environment
+secret named `CRATES_IO_BOOTSTRAP_TOKEN`, because crates.io trusted publishing
+can only be configured after the crate exists. Delete that secret after the
+first release and configure `agnt5-proto` to trust the
+`protocol-release.yml` workflow in the `protocol-release` GitHub environment.
+Subsequent releases use crates.io OIDC trusted publishing.

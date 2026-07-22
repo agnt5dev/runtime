@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7.0.0
@@ -44,6 +46,16 @@ jobs:
           buf format -d --exit-code
           buf lint
           buf build
+
+      - name: Reject public protocol breaking changes
+        working-directory: proto
+        run: |
+          latest_tag="$(git tag --list 'protocol/v*' --sort=-version:refname | head -n 1)"
+          if [[ -n "${latest_tag}" ]]; then
+            buf breaking \
+              --path agnt5/protocol/v2 \
+              --against "../.git#tag=${latest_tag},subdir=proto"
+          fi
 
       - name: Regenerate Go bindings
         working-directory: proto
@@ -104,6 +116,9 @@ jobs:
 
       - name: Run unit tests
         run: cargo test --workspace --locked
+
+      - name: Package public Rust protocol crate
+        run: cargo package --locked -p agnt5-proto
 
       - name: Run PostgreSQL integration tests
         env:
