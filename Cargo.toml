@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "proto",
     "crates/core",
     "crates/postgres",
     "crates/processor",
@@ -20,6 +21,7 @@ rust-version = "1.97"
 
 [workspace.dependencies]
 agnt5-core = { path = "crates/core" }
+agnt5-proto = { path = "proto" }
 agnt5-postgres = { path = "crates/postgres" }
 agnt5-processor = { path = "crates/processor" }
 agnt5-coordinator = { path = "crates/coordinator" }
@@ -27,9 +29,19 @@ agnt5-gateway = { path = "crates/gateway" }
 agnt5-telemetry = { path = "crates/telemetry" }
 async-stream = "0.3"
 async-trait = "0.1"
+axum = "0.8"
 bytes = "1"
 futures-core = "0.3"
+prost = "0.14"
+prost-types = "0.14"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "migrate", "macros"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-stream = "0.1"
+tonic = "0.14"
+tonic-prost = "0.14"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v7"] }

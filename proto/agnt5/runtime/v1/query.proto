@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package agnt5.runtime.v1;
+
+import "agnt5/protocol/v2/component.proto";
+import "agnt5/protocol/v2/dispatch.proto";
+import "agnt5/protocol/v2/execution.proto";
+import "google/protobuf/timestamp.proto";
+
+// QueryService provides backend-neutral reads for the local CLI and UI. SDK
+// workers do not depend on this service.
+service QueryService {
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc ListRunEvents(ListRunEventsRequest) returns (ListRunEventsResponse);
+  rpc GetQueueSummary(GetQueueSummaryRequest) returns (GetQueueSummaryResponse);
+}
+
+message ListRunsRequest {
+  repeated agnt5.protocol.v2.RunStatus statuses = 1;
+  agnt5.protocol.v2.ComponentTarget target = 2;
+  google.protobuf.Timestamp created_after = 3;
+  google.protobuf.Timestamp created_before = 4;
+  uint32 page_size = 5;
+  // Opaque snapshot cursor issued by the runtime.
+  string page_token = 6;
+}
+
+message ListRunsResponse {
+  repeated agnt5.protocol.v2.Run runs = 1;
+  string next_page_token = 2;
+}
+
+message ListRunEventsRequest {
+  string run_id = 1;
+  // Opaque event cursor returned by a previous query or stream response.
+  string after_cursor = 2;
+  uint32 page_size = 3;
+}
+
+message QueriedRunEvent {
+  string cursor = 1;
+  agnt5.protocol.v2.DurableEvent event = 2;
+  google.protobuf.Timestamp observed_at = 3;
+}
+
+message ListRunEventsResponse {
+  repeated QueriedRunEvent events = 1;
+  string next_cursor = 2;
+}
+
+message GetQueueSummaryRequest {}
+
+// QueueSummary exposes aggregate health, never queue rows, policy leases,
+// requeue commands, partitions, or worker placement.
+message QueueSummary {
+  uint64 ready_runs = 1;
+  uint64 scheduled_runs = 2;
+  uint64 policy_blocked_runs = 3;
+  uint64 waiting_for_worker_runs = 4;
+  google.protobuf.Timestamp oldest_ready_at = 5;
+}
+
+message GetQueueSummaryResponse {
+  QueueSummary summary = 1;
+  google.protobuf.Timestamp observed_at = 2;
+}

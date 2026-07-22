@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// TriggerExpression never implies a runtime-specific expression evaluator.
+// language is a named, versioned dialect such as "cel.v1". A runtime must
+// reject a declaration when it did not negotiate support for that dialect.
+message TriggerExpression {
+  string language = 1;
+  string source = 2;
+}
+
+message EventTrigger {
+  string event_name = 1;
+  // If absent, every event with event_name matches. The expression evaluates
+  // to a boolean against the event envelope.
+  TriggerExpression filter = 2;
+  // If absent, the event payload becomes the run input. When present, the
+  // expression produces an input compatible with the component input schema.
+  TriggerExpression input_mapping = 3;
+  // A positive window enables runtime-owned batching before input_mapping is
+  // evaluated. Absence means one run per matched event.
+  google.protobuf.Duration batch_window = 4;
+  // Optional expression producing a non-negative delay before the run becomes
+  // eligible. It does not create a public queue resource.
+  TriggerExpression delay = 5;
+}
+
+message CronSchedule {
+  string expression = 1;
+  // IANA time-zone name. Empty means UTC.
+  string time_zone = 2;
+  // Named, versioned cron dialect. The initial portable value is
+  // "unix-cron.v1"; provider macros and unversioned dialects are invalid.
+  string format = 3;
+}
+
+message IntervalSchedule {
+  google.protobuf.Duration interval = 1;
+  // Stable alignment point for occurrences. It prevents re-registration or a
+  // runtime restart from shifting the schedule.
+  google.protobuf.Timestamp anchor_time = 2;
+}
+
+message ScheduleTrigger {
+  oneof schedule {
+    CronSchedule cron = 1;
+    IntervalSchedule interval = 2;
+  }
+}
+
+// TriggerDescriptor is a portable declaration, not a scheduler resource.
+// trigger_id must be stable and unique within one component version so the
+// runtime can deduplicate activation and derive occurrence idempotency keys.
+message TriggerDescriptor {
+  string trigger_id = 1;
+  oneof kind {
+    EventTrigger event = 2;
+    ScheduleTrigger schedule = 3;
+  }
+  // Non-secret annotations only. Provider integration IDs, webhook secrets,
+  // credentials, and deployment routing belong to managed configuration.
+  map<string, string> metadata = 4;
+}

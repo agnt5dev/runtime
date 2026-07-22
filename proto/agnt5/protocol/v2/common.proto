@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// Payload is the transport-neutral representation of execution input and
+// output. Large values use an opaque runtime-issued reference; public clients
+// never depend on a storage-provider URL or object-store implementation.
+message Payload {
+  oneof body {
+    bytes inline_data = 1;
+    PayloadReference reference = 2;
+  }
+
+  string content_type = 3;
+  string content_encoding = 4;
+  uint64 size_bytes = 5;
+  bytes sha256 = 6;
+}
+
+message PayloadReference {
+  // Opaque, integrity-protected token issued by the runtime. Consumers must
+  // not parse it or persist assumptions about its encoding.
+  bytes token = 1;
+}
+
+enum FailureKind {
+  FAILURE_KIND_UNSPECIFIED = 0;
+  FAILURE_KIND_APPLICATION = 1;
+  FAILURE_KIND_TIMEOUT = 2;
+  FAILURE_KIND_CANCELLED = 3;
+  FAILURE_KIND_NON_DETERMINISTIC = 4;
+  FAILURE_KIND_RESOURCE_EXHAUSTED = 5;
+  FAILURE_KIND_EXTERNAL = 6;
+}
+
+// RetryDirective is a worker's structured recommendation. The runtime remains
+// authoritative and applies the configured retry policy.
+enum RetryDirective {
+  RETRY_DIRECTIVE_UNSPECIFIED = 0;
+  RETRY_DIRECTIVE_DEFAULT_POLICY = 1;
+  RETRY_DIRECTIVE_RETRY = 2;
+  RETRY_DIRECTIVE_DO_NOT_RETRY = 3;
+}
+
+// Failure is a user-code or external-operation failure carried in durable run
+// state. Protocol and transport failures use ProtocolError instead.
+message Failure {
+  string code = 1;
+  string message = 2;
+  FailureKind kind = 3;
+  RetryDirective retry_directive = 4;
+  google.protobuf.Duration retry_after = 5;
+  string stack_trace = 6;
+  Failure cause = 7;
+  map<string, string> details = 8;
+}
+
+// TraceContext continues W3C trace context after a durable queue boundary.
+// Request-time propagation still uses normal HTTP/gRPC metadata.
+message TraceContext {
+  string traceparent = 1;
+  string tracestate = 2;
+  string baggage = 3;
+}
+
+// ApplicationContext carries application-level conversation identity. These
+// values select session- and user-scoped state; they are not authentication
+// principals, tenant IDs, deployment IDs, roles, or permission claims.
+message ApplicationContext {
+  string session_id = 1;
+  string user_id = 2;
+}

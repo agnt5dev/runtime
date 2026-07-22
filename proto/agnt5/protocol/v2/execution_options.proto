@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+enum RetryBackoffStrategy {
+  RETRY_BACKOFF_STRATEGY_UNSPECIFIED = 0;
+  RETRY_BACKOFF_STRATEGY_CONSTANT = 1;
+  RETRY_BACKOFF_STRATEGY_LINEAR = 2;
+  RETRY_BACKOFF_STRATEGY_EXPONENTIAL = 3;
+}
+
+// RetryPolicy is evaluated by the runtime after an execution slice fails.
+// maximum_attempts counts the initial attempt and must be at least one when
+// this message is present. A value of one therefore disables retries. When the
+// message is present, omitted backoff values use the protocol defaults:
+// exponential, one second initial, 60 seconds maximum, coefficient 2.0.
+message RetryPolicy {
+  uint32 maximum_attempts = 1;
+  google.protobuf.Duration initial_backoff = 2;
+  google.protobuf.Duration maximum_backoff = 3;
+  // Exponential coefficient. Constant and linear strategies ignore it.
+  double backoff_multiplier = 4;
+  repeated string non_retryable_failure_codes = 5;
+  RetryBackoffStrategy backoff_strategy = 6;
+}
+
+// ExecutionDefaults belongs to a component declaration. These are defaults,
+// not admission or security restrictions: a StartRun caller may override them,
+// while the runtime may still enforce stricter operational limits.
+message ExecutionDefaults {
+  RetryPolicy retry_policy = 1;
+  // Maximum wall-clock duration of the durable run, including waits and retry
+  // backoff. A present zero duration declares no component deadline.
+  google.protobuf.Duration run_timeout = 2;
+  // Maximum wall-clock duration of one user-code attempt. Endpoint executions
+  // may yield earlier when their negotiated host budget is smaller. A present
+  // zero duration declares no component attempt deadline.
+  google.protobuf.Duration execution_timeout = 3;
+}

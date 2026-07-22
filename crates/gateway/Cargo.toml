@@ -10,4 +10,9 @@ rust-version.workspace = true
 
 [dependencies]
 agnt5-core.workspace = true
-
+agnt5-processor.workspace = true
+axum.workspace = true
+bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true

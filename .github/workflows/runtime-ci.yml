@@ -1,4 +1,4 @@
-name: CI
+name: Runtime CI
 
 on:
   push:
@@ -19,6 +19,63 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  protocol:
+    name: Protocol and Go bindings
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version: 1.23.x
+          cache-dependency-path: gen/go/go.sum
+
+      - name: Install pinned protocol tools
+        env:
+          GOTOOLCHAIN: auto
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@v1.57.2
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+
+      - name: Validate protobuf modules
+        working-directory: proto
+        run: |
+          buf format -d --exit-code
+          buf lint
+          buf build
+
+      - name: Reject public protocol breaking changes
+        working-directory: proto
+        run: |
+          latest_tag="$(git tag --list 'protocol/v*' --sort=-version:refname | head -n 1)"
+          if [[ -n "${latest_tag}" ]]; then
+            buf breaking \
+              --path agnt5/protocol/v2 \
+              --against "../.git#tag=${latest_tag},subdir=proto"
+          fi
+
+      - name: Regenerate Go bindings
+        working-directory: proto
+        run: buf generate --template buf.gen.go.yaml
+
+      - name: Verify Go module
+        working-directory: gen/go
+        run: |
+          go mod tidy
+          go test ./...
+
+      - name: Reject generated drift
+        run: |
+          if [[ -n "$(git status --porcelain -- gen/go)" ]]; then
+            git status --short -- gen/go
+            exit 1
+          fi
+
   verify:
     name: Rust checks and PostgreSQL tests
     runs-on: ubuntu-24.04
@@ -61,6 +118,9 @@ jobs:
 
       - name: Run unit tests
         run: cargo test --workspace --locked
+
+      - name: Package public Rust protocol crate
+        run: cargo package --locked -p agnt5-proto
 
       - name: Run PostgreSQL integration tests
         env:

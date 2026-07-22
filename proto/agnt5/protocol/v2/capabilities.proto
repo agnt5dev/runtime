@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// ProtocolVersion selects wire and behavioral semantics. Major versions are
+// incompatible; minor versions add backward-compatible behavior.
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+// Capability is named and independently versioned so clients do not depend on
+// an opaque feature-bit allocation.
+message Capability {
+  string name = 1;
+  uint32 version = 2;
+}
+
+message CapabilityRequirement {
+  string name = 1;
+  uint32 minimum_version = 2;
+  bool required = 3;
+}
+
+// ProtocolLimits are negotiated interoperability limits, not managed quotas.
+// A client must honor the selected runtime or endpoint limits.
+message ProtocolLimits {
+  uint64 maximum_message_bytes = 1;
+  uint64 maximum_inline_payload_bytes = 2;
+  uint64 maximum_event_batch_bytes = 3;
+  uint32 maximum_events_per_batch = 4;
+}
+
+service ProtocolService {
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+}
+
+message GetCapabilitiesRequest {
+  ProtocolVersion minimum_protocol = 1;
+  ProtocolVersion maximum_protocol = 2;
+  repeated CapabilityRequirement capabilities = 3;
+}
+
+message GetCapabilitiesResponse {
+  ProtocolVersion selected_protocol = 1;
+  repeated Capability capabilities = 2;
+  string runtime_name = 3;
+  string runtime_version = 4;
+  ProtocolLimits limits = 5;
+}

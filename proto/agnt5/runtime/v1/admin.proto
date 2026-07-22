@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package agnt5.runtime.v1;
+
+import "agnt5/protocol/v2/capabilities.proto";
+import "google/protobuf/timestamp.proto";
+
+// AdminService exposes local process identity and readiness. It intentionally
+// has no cluster member, leader, replica, partition owner, or tenant fields.
+service AdminService {
+  rpc GetRuntimeInfo(GetRuntimeInfoRequest) returns (GetRuntimeInfoResponse);
+  rpc GetRuntimeHealth(GetRuntimeHealthRequest) returns (GetRuntimeHealthResponse);
+}
+
+message GetRuntimeInfoRequest {}
+
+message GetRuntimeInfoResponse {
+  string runtime_name = 1;
+  string runtime_version = 2;
+  string build_revision = 3;
+  agnt5.protocol.v2.ProtocolVersion minimum_protocol = 4;
+  agnt5.protocol.v2.ProtocolVersion maximum_protocol = 5;
+  repeated agnt5.protocol.v2.Capability capabilities = 6;
+  google.protobuf.Timestamp started_at = 7;
+}
+
+message GetRuntimeHealthRequest {}
+
+enum RuntimeHealthStatus {
+  RUNTIME_HEALTH_STATUS_UNSPECIFIED = 0;
+  RUNTIME_HEALTH_STATUS_STARTING = 1;
+  RUNTIME_HEALTH_STATUS_READY = 2;
+  RUNTIME_HEALTH_STATUS_DEGRADED = 3;
+  RUNTIME_HEALTH_STATUS_NOT_READY = 4;
+}
+
+message RuntimeHealthCheck {
+  string name = 1;
+  RuntimeHealthStatus status = 2;
+  string detail = 3;
+}
+
+message GetRuntimeHealthResponse {
+  RuntimeHealthStatus status = 1;
+  repeated RuntimeHealthCheck checks = 2;
+  google.protobuf.Timestamp observed_at = 3;
+}

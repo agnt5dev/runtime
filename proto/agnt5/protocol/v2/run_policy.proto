@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// RunPolicy is the component-authored, runtime-enforced policy governing when
+// a durable run may start or resume. It is not an API quota, a worker-capacity
+// advertisement, or a managed fleet-placement request.
+//
+// The runtime combines the component declaration with runtime configuration to
+// produce an effective policy. Callers cannot supply or weaken this policy in
+// StartRunRequest. Security policies, such as tool or network access, may be
+// added to this envelope in a future backward-compatible revision.
+message RunPolicy {
+  repeated ConcurrencyLimit concurrency = 1;
+  repeated StartRateLimit rate_limits = 2;
+  repeated PermitRequirement permits = 3;
+}
+
+// PolicyKey selects the logical group governed by a policy entry. If omitted,
+// the runtime derives a key from the component target. input_json_pointer uses
+// RFC 6901 JSON Pointer against a JSON input payload; it is intentionally not a
+// general expression language.
+//
+// In an effective policy delivered for execution, input_json_pointer must have
+// been resolved and replaced by value.
+message PolicyKey {
+  oneof selector {
+    string value = 1;
+    string input_json_pointer = 2;
+  }
+}
+
+// ConcurrencyLimit bounds active execution slices for a logical key. Waiting,
+// retry-backoff, yielded, and terminal runs do not consume this limit.
+message ConcurrencyLimit {
+  uint32 maximum_in_flight = 1;
+  PolicyKey key = 2;
+}
+
+// StartRateLimit bounds execution starts over time. An already accepted run is
+// delayed in the durable queue until eligible; it is not rejected or dropped.
+// burst is the token-bucket capacity. A value of zero uses maximum_starts; use
+// one when starts should be evenly throttled.
+message StartRateLimit {
+  uint32 maximum_starts = 1;
+  google.protobuf.Duration period = 2;
+  uint32 burst = 3;
+  PolicyKey key = 4;
+}
+
+// PermitRequirement acquires weighted permits from a named runtime-configured
+// pool before execution. Permits are released whenever execution ends or
+// suspends and are reacquired before the run resumes.
+message PermitRequirement {
+  string pool = 1;
+  uint32 permits = 2;
+  PolicyKey key = 3;
+}
