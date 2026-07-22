@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agnt5-coordinator"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "agnt5-core",
  "agnt5-processor",
@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-core"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-gateway"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "agnt5-core",
  "agnt5-processor",
@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-postgres"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "agnt5-core",
  "agnt5-processor",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-processor"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "agnt5-core",
  "bytes",
@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-proto"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "prost",
  "prost-types",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-runtime"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "agnt5-coordinator",
  "agnt5-core",
@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "agnt5-telemetry"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 
 [[package]]
 name = "aho-corasick"
