@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/capabilities.proto";
+import "agnt5/protocol/v2/component.proto";
+import "agnt5/protocol/v2/dispatch.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// WorkerService is pull-first. Each available worker slot owns at most one
+// parked PollRun call or one active run execution. Managed push delivery, if
+// offered, is a separately negotiated managed capability and reuses the public
+// ExecuteRunRequest and RunOutcome messages.
+service WorkerService {
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+  rpc UnregisterWorker(UnregisterWorkerRequest) returns (UnregisterWorkerResponse);
+  rpc PollRun(PollRunRequest) returns (PollRunResponse);
+  rpc RenewRunLease(RenewRunLeaseRequest) returns (RenewRunLeaseResponse);
+  rpc AppendRunEvents(AppendRunEventsRequest) returns (AppendRunEventsResponse);
+  rpc PublishRunOutput(PublishRunOutputRequest) returns (PublishRunOutputResponse);
+  rpc CommitRunOutcome(CommitRunOutcomeRequest) returns (CommitRunOutcomeResponse);
+}
+
+message RegisterWorkerRequest {
+  string worker_id = 1;
+  string service_name = 2;
+  string service_version = 3;
+  string sdk_language = 4;
+  string sdk_version = 5;
+  ProtocolVersion minimum_protocol = 6;
+  ProtocolVersion maximum_protocol = 7;
+  repeated CapabilityRequirement capabilities = 8;
+  repeated ComponentDescriptor components = 9;
+  uint32 max_concurrency = 10;
+  map<string, string> metadata = 11;
+}
+
+message RegisterWorkerResponse {
+  // Opaque capability bound to the authenticated principal and a monotonically
+  // increasing session generation. Re-registering the same worker_id fences
+  // the previous session from polling, renewing, appending, or committing.
+  bytes worker_session_token = 1;
+  google.protobuf.Timestamp session_expires_at = 2;
+  ProtocolVersion selected_protocol = 3;
+  repeated Capability capabilities = 4;
+  google.protobuf.Duration maximum_poll_wait = 5;
+  google.protobuf.Duration lease_duration = 6;
+  google.protobuf.Duration recommended_renew_interval = 7;
+  ProtocolLimits limits = 8;
+}
+
+message UnregisterWorkerRequest {
+  bytes worker_session_token = 1;
+  string reason = 2;
+}
+
+message UnregisterWorkerResponse {}
+
+message PollRunRequest {
+  bytes worker_session_token = 1;
+  // Unique per logical poll and stable across transport retries. The runtime
+  // transactionally binds poll_id to its execute command or idle result so a
+  // lost response can be replayed without leasing another run.
+  string poll_id = 2;
+  google.protobuf.Duration wait_timeout = 3;
+}
+
+message PollIdle {
+  google.protobuf.Timestamp retry_at = 1;
+}
+
+message PollRunResponse {
+  oneof result {
+    ExecuteRunRequest execute = 1;
+    PollIdle idle = 2;
+  }
+}

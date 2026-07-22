@@ -18,5 +18,10 @@ agnt5-postgres.workspace = true
 agnt5-processor.workspace = true
 agnt5-coordinator.workspace = true
 agnt5-gateway.workspace = true
+agnt5-proto = { workspace = true, features = ["legacy-api"] }
 agnt5-telemetry.workspace = true
+axum.workspace = true
 tokio.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

@@ -24,6 +24,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "34180:34180"
+      - "34181:34181"
 
 volumes:
   agnt5-postgres:

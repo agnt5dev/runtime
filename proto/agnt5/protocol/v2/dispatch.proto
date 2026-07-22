@@ -1,0 +1,230 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/common.proto";
+import "agnt5/protocol/v2/component.proto";
+import "agnt5/protocol/v2/run_policy.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// ExecuteRunRequest is a command to advance an existing durable run. It is
+// delivered at least once and is not itself a durable resource.
+message ExecuteRunRequest {
+  string run_id = 1;
+  ComponentTarget target = 2;
+  Payload input = 3;
+  Payload checkpoint = 4;
+  // Retry attempt for user code. Retrying the same transport delivery does not
+  // increment this value.
+  uint32 attempt = 5;
+  // Runtime-resolved maximum duration for this user-code attempt after
+  // component defaults, caller overrides, and runtime limits are applied.
+  google.protobuf.Duration execution_timeout = 6;
+  TraceContext trace_context = 7;
+  map<string, string> metadata = 8;
+
+  // Opaque authority for subsequent pull-worker operations. The token binds or
+  // securely resolves the authenticated subject, run, execution, internal
+  // component incarnation and expected revision, worker session, attempt, and
+  // lease generation. A new lease generation fences the previous token;
+  // successful renewal does not rotate it. Endpoint requests do not expose
+  // this token because the runtime owns their fence during the HTTP invocation.
+  bytes execution_token = 9;
+  google.protobuf.Timestamp lease_expires_at = 10;
+  // Stable identity for this logical execution slice. It remains unchanged
+  // across transport retries and is diagnostic, not authority.
+  string execution_id = 11;
+  // Runtime-resolved policy for this execution. Scheduling fields are evidence
+  // for observability; the runtime, not the worker, owns their enforcement.
+  // Future execution-local security policy is enforced by capable workers.
+  RunPolicy effective_run_policy = 12;
+  // Opaque runtime-computed fingerprint bound to execution_token so the
+  // effective policy cannot be substituted or weakened during this execution.
+  // Clients must not recompute or interpret it.
+  bytes effective_run_policy_digest = 13;
+  // Persisted application identity inherited from StartRunRequest.
+  ApplicationContext application_context = 14;
+}
+
+message RenewRunLeaseRequest {
+  // The token remains stable across successful renewals.
+  bytes execution_token = 1;
+}
+
+message RenewRunLeaseResponse {
+  google.protobuf.Timestamp lease_expires_at = 1;
+  bool cancellation_requested = 2;
+  string cancellation_reason = 3;
+}
+
+message DurableEvent {
+  string event_id = 1;
+  uint64 sequence = 2;
+  string event_type = 3;
+  Payload payload = 4;
+  google.protobuf.Timestamp source_time = 5;
+  string correlation_id = 6;
+  string causation_id = 7;
+  map<string, string> metadata = 8;
+  // Optional logical durable-operation correlation. Correctness-driving
+  // operations themselves use the typed messages in durable.proto.
+  string operation_id = 9;
+}
+
+message AppendRunEventsRequest {
+  bytes execution_token = 1;
+  repeated DurableEvent events = 2;
+}
+
+message AppendRunEventsResponse {
+  // Highest contiguous execution-local sequence durably accepted. Retrying
+  // an already accepted event_id and sequence is idempotent.
+  uint64 accepted_through_sequence = 1;
+}
+
+message RunOutputEvent {
+  uint64 sequence = 1;
+  string event_type = 2;
+  Payload payload = 3;
+  google.protobuf.Timestamp source_time = 4;
+}
+
+// PublishRunOutput is a bounded, acknowledged live-output batch. Output is not
+// authoritative run state and is deduplicated by stream_id and sequence.
+message PublishRunOutputRequest {
+  bytes execution_token = 1;
+  string stream_id = 2;
+  repeated RunOutputEvent events = 3;
+}
+
+message PublishRunOutputResponse {
+  string stream_id = 1;
+  uint64 accepted_through_sequence = 2;
+}
+
+message RunCompleted {
+  Payload output = 1;
+  map<string, string> metadata = 2;
+}
+
+message ExecutionFailed {
+  Failure failure = 1;
+  map<string, string> metadata = 2;
+}
+
+message RunCancelled {
+  string reason = 1;
+  map<string, string> metadata = 2;
+}
+
+// RunSuspended is a durable wait. The runtime persists the checkpoint and
+// resumes the run only after its typed wait condition is satisfied.
+message RunSuspended {
+  string reason = 1;
+  Payload checkpoint = 2;
+  WaitCondition wait_condition = 3;
+  map<string, string> metadata = 4;
+}
+
+message WaitCondition {
+  oneof condition {
+    TimerWait timer = 1;
+    SignalWait signal = 2;
+    UserInputWait user_input = 3;
+  }
+
+  // Stable across replay of the same logical wait. A replacement wait receives
+  // a new ID even if its name or step is unchanged.
+  string wait_id = 4;
+}
+
+message TimerWait {
+  google.protobuf.Timestamp ready_at = 1;
+  string timer_key = 2;
+}
+
+message SignalWait {
+  string signal_name = 1;
+  string waiting_step = 2;
+}
+
+message UserInputWait {
+  string question = 1;
+  string input_type = 2;
+  repeated UserInputOption options = 3;
+  bool allow_custom = 4;
+  bool skippable = 5;
+  reserved 6;
+  reserved "pause_index";
+  string waiting_step = 7;
+}
+
+message UserInputOption {
+  string id = 1;
+  string label = 2;
+  string description = 3;
+}
+
+// RunYielded is a cooperative, immediately-runnable handoff, normally used
+// before an endpoint host deadline. Unlike RunSuspended it does not
+// register a timer, signal, or user-input wait.
+message RunYielded {
+  string reason = 1;
+  Payload checkpoint = 2;
+  map<string, string> metadata = 3;
+}
+
+// RunOutcome describes how one execution slice ended. Completion and
+// cancellation are terminal, while suspension and yield are non-terminal. A
+// failure is terminal only when the runtime's retry policy is exhausted.
+message RunOutcome {
+  oneof kind {
+    RunCompleted completed = 1;
+    ExecutionFailed failed = 2;
+    RunCancelled cancelled = 3;
+    RunSuspended suspended = 4;
+    RunYielded yielded = 5;
+  }
+}
+
+message CommitRunOutcomeRequest {
+  bytes execution_token = 1;
+  // Stable across retries. Reusing a commit_id with a different outcome is a
+  // conflict; retrying the same commit returns ALREADY_COMMITTED.
+  string commit_id = 2;
+  RunOutcome outcome = 3;
+  // Final semantic events are accepted atomically with the outcome.
+  repeated DurableEvent final_events = 4;
+  // Highest execution-local event sequence the worker expects to be durable
+  // when this commit succeeds. The runtime rejects gaps.
+  optional uint64 expected_last_event_sequence = 5;
+}
+
+enum CommitDisposition {
+  COMMIT_DISPOSITION_UNSPECIFIED = 0;
+  COMMIT_DISPOSITION_COMMITTED = 1;
+  COMMIT_DISPOSITION_ALREADY_COMMITTED = 2;
+}
+
+message CommitRunOutcomeResponse {
+  CommitDisposition disposition = 1;
+  google.protobuf.Timestamp committed_at = 2;
+  uint64 accepted_through_sequence = 3;
+  RunStatus run_status = 4;
+}
+
+// RunStatus is the stable application-visible lifecycle. Lease, delivery,
+// partition, and projection states remain internal implementation details.
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_QUEUED = 1;
+  RUN_STATUS_RUNNING = 2;
+  RUN_STATUS_WAITING = 3;
+  RUN_STATUS_RETRYING = 4;
+  RUN_STATUS_COMPLETED = 5;
+  RUN_STATUS_FAILED = 6;
+  RUN_STATUS_CANCELLED = 7;
+}

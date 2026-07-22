@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/common.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+// State is a revisioned document within the authenticated application scope.
+// Tenant, deployment, database, partition, and storage-provider identities are
+// intentionally absent from this public reference.
+message StateReference {
+  oneof scope {
+    CurrentRunState current_run = 1;
+    CurrentSessionState current_session = 2;
+    CurrentUserState current_user = 3;
+    GlobalState global = 4;
+    CurrentEntityState current_entity = 5;
+  }
+
+  // Stable SDK-defined document namespace. Initial portable conventions are
+  // "state", "memory", "working_memory", and "conversation".
+  string namespace = 6;
+}
+
+// CurrentRunState resolves to the run bound to the execution token.
+message CurrentRunState {}
+
+// CurrentSessionState resolves to ApplicationContext.session_id. It is invalid
+// when the run has no session ID.
+message CurrentSessionState {}
+
+// CurrentUserState resolves to ApplicationContext.user_id. It is invalid when
+// the run has no user ID.
+message CurrentUserState {}
+
+// GlobalState is global only within the authenticated single-tenant runtime or
+// managed tenant boundary. It is never process-global across tenants.
+message GlobalState {}
+
+// CurrentEntityState resolves to the current ENTITY target and is invalid for
+// other component types. Code must invoke another entity rather than directly
+// mutating that entity's state.
+message CurrentEntityState {}
+
+// StateDocument is the value observed at one durable operation sequence.
+// revision_token is always present, including when found is false, and binds
+// the logical reference to the observed revision. It is an optimistic
+// precondition, not execution authority.
+message StateDocument {
+  StateReference reference = 1;
+  bool found = 2;
+  Payload value = 3;
+  bytes revision_token = 4;
+}
+
+message ReadStateOperation {
+  StateReference reference = 1;
+}
+
+// SetStateOperation replaces the complete document. SDK key/value, working
+// memory, and conversation helpers perform their language-native update
+// locally and submit the resulting JSON document.
+message SetStateOperation {
+  StateReference reference = 1;
+  Payload value = 2;
+  // Must be the token returned by the read or previous mutation this update is
+  // based on. Blind writes are not part of the portable v2 contract.
+  bytes expected_revision_token = 3;
+}
+
+message DeleteStateOperation {
+  StateReference reference = 1;
+  bytes expected_revision_token = 2;
+}
+
+message StateReadResult {
+  StateDocument document = 1;
+}
+
+// StateMutationResult returns the canonical post-mutation document. A delete
+// returns found=false with a new absence revision token.
+message StateMutationResult {
+  StateDocument document = 1;
+}

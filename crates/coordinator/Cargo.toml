@@ -10,4 +10,10 @@ rust-version.workspace = true
 
 [dependencies]
 agnt5-core.workspace = true
-
+agnt5-processor.workspace = true
+agnt5-proto = { workspace = true, features = ["legacy-api"] }
+bytes.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+uuid.workspace = true

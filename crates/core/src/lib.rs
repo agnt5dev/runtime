@@ -2,11 +2,13 @@
 //! AGNT5 runtimes.
 
 mod journal;
+mod runtime;
 mod store;
 
 pub use journal::{
     AppendOutcome, JournalError, JournalRecord, NewJournalRecord, Offset, RecordStream, Segment,
 };
+pub use runtime::{PendingJob, RunState, RuntimeEvent};
 pub use store::{KvOp, MaterializedStore};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

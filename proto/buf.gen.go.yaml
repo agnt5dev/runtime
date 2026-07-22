@@ -1,0 +1,17 @@
+version: v2
+clean: true
+plugins:
+  - local: protoc-gen-go
+    out: ../gen/go/agnt5/protocol/v2
+    opt:
+      - paths=import
+      - module=github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2
+  - local: protoc-gen-go-grpc
+    out: ../gen/go/agnt5/protocol/v2
+    opt:
+      - paths=import
+      - module=github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2
+inputs:
+  - directory: .
+    paths:
+      - agnt5/protocol/v2

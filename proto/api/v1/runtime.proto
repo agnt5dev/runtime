@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "api/v1/engine.proto";
+
+// RuntimeService is the canonical worker-facing API for the AGNT5 runtime.
+//
+// Workers fetch jobs through parked long polling. Non-streaming jobs use no
+// persistent stream. A worker opens StreamEvents only for a run that emits
+// live output, then commits the authoritative terminal result separately.
+service RuntimeService {
+  rpc RegisterWorkerSession(RegisterWorkerSessionRequest) returns (RegisterWorkerSessionResponse);
+  rpc PollJob(PollJobRequest) returns (PollJobResponse);
+  rpc RenewJobLease(RenewJobLeaseRequest) returns (RenewJobLeaseResponse);
+
+  // AppendEvents persists low-volume semantic execution history. Token deltas
+  // and other high-volume live output belong on StreamEvents instead.
+  rpc AppendEvents(AppendEventsRequest) returns (AppendEventsResponse);
+
+  // StreamEvents is opened only for a run that produces live output. The
+  // worker may resend the stream after a broken connection; stream_id and
+  // sequence make retries idempotent. Every message in one RPC invocation
+  // must carry the same run_id and stream_id.
+  rpc StreamEvents(stream StreamEvent) returns (StreamEventsResponse);
+
+  // CommitJobResult performs the lease-fenced terminal state transition and
+  // durably records the authoritative output or error.
+  rpc CommitJobResult(CommitJobResultRequest) returns (CommitJobResultResponse);
+}
+
+message DurableEvent {
+  uint64 sequence = 1;
+  string event_type = 2;
+  bytes data = 3;
+  int64 source_timestamp_ns = 4;
+  string correlation_id = 5;
+  string parent_event_id = 6;
+  map<string, string> metadata = 7;
+}
+
+message AppendEventsRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string worker_id = 3;
+  string worker_session_id = 4;
+  string lease_id = 5;
+  repeated DurableEvent events = 6;
+}
+
+message AppendEventsResponse {
+  uint32 accepted_count = 1;
+}
+
+message StreamEvent {
+  string project_id = 1;
+  string run_id = 2;
+  string worker_id = 3;
+  string worker_session_id = 4;
+  string lease_id = 5;
+  string stream_id = 6;
+  uint64 sequence = 7;
+  string event_type = 8;
+  bytes data = 9;
+  int64 source_timestamp_ns = 10;
+}
+
+message StreamEventsResponse {
+  string run_id = 1;
+  string stream_id = 2;
+  uint64 accepted_through = 3;
+}
+
+enum JobOutcome {
+  JOB_OUTCOME_UNSPECIFIED = 0;
+  JOB_OUTCOME_COMPLETED = 1;
+  JOB_OUTCOME_FAILED = 2;
+  JOB_OUTCOME_CANCELLED = 3;
+  JOB_OUTCOME_PAUSED = 4;
+}
+
+message CommitJobResultRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string job_id = 3;
+  string worker_id = 4;
+  string worker_session_id = 5;
+  string lease_id = 6;
+  JobOutcome outcome = 7;
+  bytes output = 8;
+  string error_code = 9;
+  string error_message = 10;
+  map<string, string> metadata = 11;
+}
+
+message CommitJobResultResponse {
+  bool committed = 1;
+}

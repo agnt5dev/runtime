@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/execution_options.proto";
+import "agnt5/protocol/v2/run_policy.proto";
+import "agnt5/protocol/v2/trigger.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+enum ComponentType {
+  COMPONENT_TYPE_UNSPECIFIED = 0;
+  // Stateless user code invoked as one execution slice.
+  COMPONENT_TYPE_FUNCTION = 1;
+  // Durable orchestration that may call components, suspend, and resume.
+  COMPONENT_TYPE_WORKFLOW = 2;
+  // Keyed, stateful component with method dispatch and single-writer semantics.
+  COMPONENT_TYPE_ENTITY = 3;
+  // Model-driven component with tools, handoffs, memory, and agent policies.
+  COMPONENT_TYPE_AGENT = 4;
+  // Schema-described capability callable by an agent or another component.
+  COMPONENT_TYPE_TOOL = 5;
+  // Custom scorers are ordinary user components. AGNT5-owned built-in
+  // scorers remain part of the managed eval service, not this protocol.
+  COMPONENT_TYPE_SCORER = 6;
+}
+
+message ComponentDescriptor {
+  ComponentType type = 1;
+  string name = 2;
+  string version = 3;
+  bytes input_schema_json = 4;
+  bytes output_schema_json = 5;
+  // Non-secret, application-defined annotations. Credentials and managed
+  // deployment configuration must not be placed in this map.
+  map<string, string> metadata = 6;
+  // Component-authored declaration. Every registered instance or endpoint for
+  // the same component version must advertise an equivalent descriptor.
+  RunPolicy run_policy = 7;
+  ExecutionDefaults execution_defaults = 8;
+  repeated TriggerDescriptor triggers = 9;
+}
+
+message ComponentTarget {
+  ComponentType type = 1;
+  string name = 2;
+  string version = 3;
+  string method = 4;
+  // Application-visible key for a stateful component instance. ENTITY targets
+  // require it; other types leave it empty unless a negotiated capability
+  // defines their keyed semantics.
+  string instance_key = 5;
+}

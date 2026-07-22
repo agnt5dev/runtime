@@ -1,0 +1,18 @@
+version: v2
+modules:
+  # Published SDK/runtime contract. It must never import community-runtime or
+  # managed packages.
+  - path: .
+    includes:
+      - agnt5/protocol
+  # Community operational API. It may import the published protocol module,
+  # but it is not an SDK dependency.
+  - path: .
+    includes:
+      - agnt5/runtime
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

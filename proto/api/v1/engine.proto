@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package api.v1;
+
+service EngineService {
+  rpc RegisterWorkerSession(RegisterWorkerSessionRequest) returns (RegisterWorkerSessionResponse);
+  rpc PollJob(PollJobRequest) returns (PollJobResponse);
+  rpc RenewJobLease(RenewJobLeaseRequest) returns (RenewJobLeaseResponse);
+  rpc CompleteJob(CompleteJobRequest) returns (CompleteJobResponse);
+}
+
+// SDK workers emit execution boundary checkpoints through this sibling service
+// before reporting job completion.
+service ExecutionEngineService {
+  rpc WriteCheckpoint(WriteCheckpointRequest) returns (WriteCheckpointResponse);
+}
+
+message WriteCheckpointRequest {
+  string run_id = 1;
+  string checkpoint_type = 2;
+  bytes checkpoint_data = 3;
+  int64 sequence_number = 4;
+  string trace_id = 5;
+  string project_id = 6;
+  int64 source_timestamp_ns = 7;
+  string correlation_id = 8;
+  string parent_event_id = 9;
+  map<string, string> metadata = 10;
+}
+
+message WriteCheckpointResponse {
+  bool success = 1;
+  int64 sequence_number = 2;
+  string error_message = 3;
+}
+
+enum ComponentType {
+  COMPONENT_TYPE_UNSPECIFIED = 0;
+  COMPONENT_TYPE_FUNCTION = 1;
+  COMPONENT_TYPE_FLOW = 2;
+  COMPONENT_TYPE_OBJECT = 3;
+  COMPONENT_TYPE_TASK = 4;
+  COMPONENT_TYPE_WORKFLOW = 5;
+  COMPONENT_TYPE_AGENT = 6;
+  COMPONENT_TYPE_TOOL = 7;
+  COMPONENT_TYPE_MCP = 8;
+  COMPONENT_TYPE_ENTITY = 9;
+  COMPONENT_TYPE_SCORER = 10;
+}
+
+message WorkerSlotPolicy {
+  uint32 min_slots = 1;
+  uint32 max_slots = 2;
+  double target_cpu_usage = 3;
+  double target_memory_usage = 4;
+  int64 ramp_throttle_ms = 5;
+}
+
+message WorkerCapability {
+  ComponentType component_type = 1;
+  string component_name = 2;
+}
+
+message ComponentInfo {
+  string name = 1;
+  ComponentType component_type = 2;
+}
+
+message RegisterWorkerSessionRequest {
+  string worker_id = 1;
+  string project_id = 2;
+  string deployment_id = 3;
+  uint32 max_slots = 4;
+  WorkerSlotPolicy slot_policy = 5;
+  repeated WorkerCapability capabilities = 6;
+  repeated ComponentInfo components = 7;
+  string service_name = 8;
+  string service_version = 9;
+  string service_type = 10;
+}
+
+message RegisterWorkerSessionResponse {
+  string worker_session_id = 1;
+  int64 expires_at_ms = 2;
+  WorkerSlotPolicy effective_slot_policy = 3;
+}
+
+message PollJobRequest {
+  string worker_id = 1;
+  string worker_session_id = 2;
+  int64 wait_ms = 3;
+  int64 claim_timeout_ms = 4;
+}
+
+message PollJobResponse { JobAssignment job = 1; }
+
+message JobAssignment {
+  string job_id = 1;
+  string run_id = 2;
+  string component_id = 3;
+  ComponentType component_type = 4;
+  string component_name = 5;
+  bytes input_data = 6;
+  map<string, string> metadata = 7;
+  int32 attempt = 8;
+  int64 timeout_ms = 9;
+  string trace_id = 10;
+  string lease_id = 11;
+  int64 lease_expires_at_ms = 12;
+}
+
+message RenewJobLeaseRequest {
+  string worker_id = 1;
+  string worker_session_id = 2;
+  string run_id = 3;
+  string lease_id = 4;
+  int64 lease_timeout_ms = 5;
+}
+
+message RenewJobLeaseResponse {
+  bool renewed = 1;
+  int64 lease_expires_at_ms = 2;
+}
+
+message CompleteJobRequest {
+  string job_id = 1;
+  string worker_id = 2;
+  bool success = 3;
+  bytes output_data = 4;
+  string error_message = 5;
+  string error_code = 6;
+  map<string, string> metadata = 7;
+  string project_id = 8;
+  string lease_id = 9;
+  string worker_session_id = 10;
+}
+
+message CompleteJobResponse { bool acknowledged = 1; }

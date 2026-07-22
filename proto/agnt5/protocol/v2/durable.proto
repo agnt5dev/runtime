@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/common.proto";
+import "agnt5/protocol/v2/component.proto";
+import "agnt5/protocol/v2/dispatch.proto";
+import "agnt5/protocol/v2/state.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+service DurableService {
+  rpc ApplyDurableOperations(ApplyDurableOperationsRequest) returns (ApplyDurableOperationsResponse);
+  rpc CommitDurableOperationResults(CommitDurableOperationResultsRequest) returns (CommitDurableOperationResultsResponse);
+}
+
+// DurableOperation is a typed correctness-driving command emitted while an SDK
+// advances a run. Transport policy may carry these over WorkerService, unary
+// RPCs, or an endpoint response, but their semantics and identity are shared.
+message DurableOperation {
+  string operation_id = 1;
+  uint64 sequence = 2;
+
+  oneof kind {
+    MemoizedStepOperation step = 3;
+    RegisterWaitOperation wait = 4;
+    StartChildRunOperation child_run = 5;
+    SaveCheckpointOperation checkpoint = 6;
+    ReadStateOperation read_state = 7;
+    SetStateOperation set_state = 8;
+    DeleteStateOperation delete_state = 9;
+  }
+}
+
+message MemoizedStepOperation {
+  string step_key = 1;
+  Payload input = 2;
+}
+
+message RegisterWaitOperation {
+  WaitCondition wait_condition = 1;
+}
+
+message StartChildRunOperation {
+  string request_id = 1;
+  ComponentTarget target = 2;
+  Payload input = 3;
+}
+
+message SaveCheckpointOperation {
+  Payload checkpoint = 1;
+}
+
+message OperationCompleted {
+  Payload output = 1;
+}
+
+message OperationFailed {
+  Failure failure = 1;
+}
+
+message WaitRegistered {
+  WaitCondition wait_condition = 1;
+}
+
+message ChildRunStarted {
+  string run_id = 1;
+}
+
+message DurableOperationResult {
+  string operation_id = 1;
+  uint64 sequence = 2;
+
+  oneof result {
+    OperationCompleted completed = 3;
+    OperationFailed failed = 4;
+    WaitRegistered wait_registered = 5;
+    ChildRunStarted child_run_started = 6;
+    StateReadResult state_read = 7;
+    StateMutationResult state_mutation = 8;
+  }
+}
+
+message DurableOperationRecord {
+  DurableOperation operation = 1;
+  DurableOperationResult result = 2;
+}
+
+// OperationExecutionRequired tells a pull worker to execute an SDK-owned
+// operation whose result is not yet durable. The opaque token binds the
+// authenticated subject, execution fence, operation identity and sequence, and
+// a digest of the operation. It is authority only for committing that result.
+//
+// In v2, only MemoizedStepOperation may require SDK execution. Runtime-owned
+// operations such as waits, child starts, checkpoints, and state reads or
+// mutations are applied by the runtime and return a DurableOperationResult
+// directly.
+message OperationExecutionRequired {
+  bytes completion_token = 1;
+}
+
+message DurableOperationResolution {
+  string operation_id = 1;
+  uint64 sequence = 2;
+
+  oneof resolution {
+    // A previously recorded result, or the result of an operation applied by
+    // the runtime during this request.
+    DurableOperationResult result = 3;
+    // The worker must execute the operation and commit its result with
+    // CommitDurableOperationResults.
+    OperationExecutionRequired execution_required = 4;
+  }
+}
+
+message ApplyDurableOperationsRequest {
+  bytes execution_token = 1;
+  repeated DurableOperation operations = 2;
+}
+
+message ApplyDurableOperationsResponse {
+  // Highest contiguous operation sequence for which a durable result exists.
+  // An execution_required resolution is not included until its result commits.
+  uint64 durable_through_sequence = 1;
+  repeated DurableOperationResolution resolutions = 2;
+}
+
+message CommitDurableOperationResult {
+  bytes completion_token = 1;
+  DurableOperationResult result = 2;
+}
+
+message CommitDurableOperationResultsRequest {
+  bytes execution_token = 1;
+  repeated CommitDurableOperationResult results = 2;
+}
+
+message CommitDurableOperationResultsResponse {
+  // Highest contiguous operation sequence for which a durable result exists.
+  uint64 durable_through_sequence = 1;
+  // Canonical durable results. A retry of an identical commit returns the
+  // already recorded result; a different result for the same operation is a
+  // commit conflict.
+  repeated DurableOperationResult results = 2;
+}

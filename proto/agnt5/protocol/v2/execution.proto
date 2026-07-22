@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package agnt5.protocol.v2;
+
+import "agnt5/protocol/v2/common.proto";
+import "agnt5/protocol/v2/component.proto";
+import "agnt5/protocol/v2/dispatch.proto";
+import "agnt5/protocol/v2/execution_options.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/agnt5dev/runtime/gen/go/agnt5/protocol/v2;protocolv2";
+
+service ExecutionService {
+  rpc StartRun(StartRunRequest) returns (StartRunResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc GetRunOutcome(GetRunOutcomeRequest) returns (GetRunOutcomeResponse);
+  rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
+  rpc SendSignal(SendSignalRequest) returns (SendSignalResponse);
+  rpc ResolveWait(ResolveWaitRequest) returns (ResolveWaitResponse);
+  rpc StreamRunEvents(StreamRunEventsRequest) returns (stream StreamRunEventsResponse);
+}
+
+message Run {
+  string run_id = 1;
+  ComponentTarget target = 2;
+  RunStatus status = 3;
+  uint32 attempt = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+}
+
+message StartRunRequest {
+  // Stable across retries and used as the idempotency key for this start.
+  string request_id = 1;
+  ComponentTarget target = 2;
+  Payload input = 3;
+  // Atomic caller override for the component retry default. Runtime limits may
+  // cap it; maximum_attempts must be at least one when present.
+  RetryPolicy retry_policy = 4;
+  // Caller override for the component run timeout. A present zero duration
+  // disables the component default, subject to runtime limits.
+  google.protobuf.Duration run_timeout = 5;
+  TraceContext trace_context = 6;
+  map<string, string> metadata = 7;
+  ApplicationContext application_context = 8;
+  // Caller override for the component per-attempt execution timeout. A present
+  // zero duration disables the component default, subject to runtime limits.
+  google.protobuf.Duration execution_timeout = 9;
+}
+
+message StartRunResponse {
+  Run run = 1;
+}
+
+message GetRunRequest {
+  string run_id = 1;
+}
+
+message GetRunResponse {
+  Run run = 1;
+}
+
+message GetRunOutcomeRequest {
+  string run_id = 1;
+}
+
+message GetRunOutcomeResponse {
+  Run run = 1;
+  // Present only after the run reaches a terminal status.
+  RunOutcome outcome = 2;
+}
+
+message CancelRunRequest {
+  string request_id = 1;
+  string run_id = 2;
+  string reason = 3;
+}
+
+enum CommandDisposition {
+  COMMAND_DISPOSITION_UNSPECIFIED = 0;
+  COMMAND_DISPOSITION_ACCEPTED = 1;
+  COMMAND_DISPOSITION_ALREADY_APPLIED = 2;
+}
+
+message CancelRunResponse {
+  CommandDisposition disposition = 1;
+  RunStatus run_status = 2;
+}
+
+message SendSignalRequest {
+  // Stable signal identity and idempotency key.
+  string signal_id = 1;
+  string run_id = 2;
+  string signal_name = 3;
+  Payload payload = 4;
+}
+
+message SendSignalResponse {
+  CommandDisposition disposition = 1;
+  RunStatus run_status = 2;
+}
+
+message ResolveWaitRequest {
+  // Stable resolution identity and idempotency key.
+  string resolution_id = 1;
+  string run_id = 2;
+  string wait_id = 3;
+  Payload response = 4;
+  bool skipped = 5;
+}
+
+message ResolveWaitResponse {
+  CommandDisposition disposition = 1;
+  RunStatus run_status = 2;
+}
+
+message StreamRunEventsRequest {
+  string run_id = 1;
+  // Opaque runtime cursor from a previously received event.
+  string after_cursor = 2;
+}
+
+message StreamRunEventsResponse {
+  string run_id = 1;
+  string cursor = 2;
+  DurableEvent event = 3;
+  google.protobuf.Timestamp observed_at = 4;
+}
