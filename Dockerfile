@@ -1,4 +1,7 @@
 FROM lukemathwalker/cargo-chef:latest-rust-1-bookworm AS chef
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends cmake \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 
 FROM chef AS planner
