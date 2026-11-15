@@ -52,21 +52,25 @@ target/release/agnt5-runtime
 
 The image is named `agnt5-runtime`, and so is the binary inside it.
 
-Each change to `main` publishes it, built the same way, as the Linux x86-64
-`agnt5-runtime` container image (`.github/workflows/image.yml`):
+Each release, tagged `vX.Y.Z`, publishes the Linux x86-64 `agnt5-runtime`
+container image, built the same way (`.github/workflows/release.yml`):
 
 ```text
-ghcr.io/agnt5dev/agnt5-runtime:sha-<full commit SHA>   # pin this
-ghcr.io/agnt5dev/agnt5-runtime:main                     # latest main, moves
+ghcr.io/agnt5dev/agnt5-runtime:0.1.0          # one release; pin this
+ghcr.io/agnt5dev/agnt5-runtime:0.1            # the latest 0.1.x release
+ghcr.io/agnt5dev/agnt5-runtime:latest         # the latest release
+ghcr.io/agnt5dev/agnt5-runtime:sha-<commit>   # the commit a release was built from
 ```
 
-SDK test suites pin a `sha-` tag, so a runtime change reaches an SDK only when
-that SDK moves its pin. To run the binary directly, as the SDK test fixtures
-do, copy it out of the image and check it against the checksum stored beside
-it:
+What each release changed is in [`CHANGELOG.md`](../CHANGELOG.md). SDK test suites
+pin a version, so a runtime change reaches an SDK only when that SDK moves its
+pin.
+
+To run the binary directly, as the SDK test fixtures do, copy it out of the
+image and check it against the checksum stored beside it:
 
 ```bash
-IMAGE=ghcr.io/agnt5dev/agnt5-runtime:sha-<commit>
+IMAGE=ghcr.io/agnt5dev/agnt5-runtime:<version>
 container=$(docker create "$IMAGE")
 docker cp "$container:/usr/local/bin/agnt5-runtime" .
 docker cp "$container:/usr/local/share/agnt5/agnt5-runtime.sha256" .

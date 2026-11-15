@@ -305,6 +305,7 @@ where
         .await
         .with_context(|| format!("bind HTTP listener {}", config.http_addr))?;
     info!(
+        version = env!("CARGO_PKG_VERSION"),
         http_addr = %config.http_addr,
         grpc_addr = %config.grpc_addr,
         namespace = %config.namespace,

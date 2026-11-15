@@ -9,14 +9,15 @@ Workers written with the AGNT5 Python, TypeScript or Go SDK connect to it and pu
 
 ## Run it
 
-The published image pins each build by commit:
+Each release publishes an image. `latest` is the newest release; pin a version, such as
+`0.1.0`, where an upgrade should be a choice:
 
 ```bash
 docker run --rm -p 34185:34185 -p 34186:34186 \
   -e AGNT5_DATABASE_BACKEND=sqlite \
   -e AGNT5_HTTP_ADDR=0.0.0.0:34185 -e AGNT5_GRPC_ADDR=0.0.0.0:34186 \
   -e AGNT5_API_KEY=replace-me -e AGNT5_WORKER_SESSION_SIGNING_KEY=replace-me-too \
-  ghcr.io/agnt5dev/agnt5-runtime:main
+  ghcr.io/agnt5dev/agnt5-runtime:latest
 ```
 
 Listening beyond loopback requires an API key or JWT secret, and a signing key of your own.
@@ -54,6 +55,13 @@ The PostgreSQL storage tests also run against a database you provide:
 AGNT5_POSTGRES_TEST_URL=postgresql://user:password@127.0.0.1:5432/db \
   cargo test -p engine-postgres -- --include-ignored --test-threads=1
 ```
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org), and [`CHANGELOG.md`](CHANGELOG.md)
+says what each one changed. Publishing a `vX.Y.Z` release on GitHub runs CI and publishes the
+image as `ghcr.io/agnt5dev/agnt5-runtime:X.Y.Z`, `:X.Y` and `:latest`. Nothing is published from
+other pushes to `main`.
 
 ## Contributing
 
