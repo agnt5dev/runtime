@@ -1,91 +1,66 @@
-# AGNT5 Runtime
+# AGNT5 runtime
 
-AGNT5 Runtime is the open-source, single-node runtime for durable agentic
-workflows. It is distributed as one `agnt5-runtime` binary and stores all
-durable state in PostgreSQL.
+The single-process runtime for [AGNT5](https://agnt5.com) workflows and agents. It runs your
+functions, workflows and agents durably: each step is recorded in a journal, a crashed worker's
+runs move to a healthy one, and a sleep or a pause for a person's answer survives a restart.
 
-## Product boundary
+It is one binary, `agnt5-runtime`, backed by PostgreSQL, a local SQLite file, or Turso.
+Workers written with the AGNT5 Python, TypeScript or Go SDK connect to it and pull work.
 
-The community runtime is intentionally:
+## Run it
 
-- one AGNT5 process backed by PostgreSQL;
-- single-tenant and single-active-runtime;
-- authenticated with JWT, without roles or permissions;
-- compatible with every supported AGNT5 SDK;
-- observable through OpenTelemetry.
-
-High availability, replication, object-store archival, fleet management,
-managed deployments, and eval services are not part of this repository.
-
-## Repository layout
-
-```text
-crates/core         Stable runtime contracts and domain types
-crates/postgres     PostgreSQL journal and materialized store
-crates/processor    Journal processing and workflow projections
-crates/coordinator  Worker sessions, polling, leases, and completion
-crates/gateway      HTTP/gRPC APIs and JWT authentication
-crates/telemetry    OpenTelemetry configuration
-runtime             The only shipped binary
-migrations          PostgreSQL migrations
-tests               Backend conformance and crash-recovery tests
-deploy              Docker Compose and packaging
-```
-
-Library crates are internal code boundaries. Users deploy only the
-`agnt5-runtime` executable and PostgreSQL.
-
-## Development
+The published image pins each build by commit:
 
 ```bash
-cargo fmt --check
-cargo test --workspace
-AGNT5_TEST_DATABASE_URL=postgres://agnt5:agnt5@localhost:5432/agnt5 \
-  cargo test -p agnt5-postgres --features integration-tests --test postgres
-AGNT5_DATABASE_URL=postgres://agnt5:agnt5@localhost:5432/agnt5 \
-  cargo run -p agnt5-runtime
+docker run --rm -p 34185:34185 -p 34186:34186 \
+  -e AGNT5_DATABASE_BACKEND=sqlite \
+  -e AGNT5_HTTP_ADDR=0.0.0.0:34185 -e AGNT5_GRPC_ADDR=0.0.0.0:34186 \
+  -e AGNT5_API_KEY=replace-me -e AGNT5_WORKER_SESSION_SIGNING_KEY=replace-me-too \
+  ghcr.io/agnt5dev/agnt5-runtime:main
 ```
 
-The binary exposes the SDK worker protocol over gRPC on port `34180` and the
-submission API over HTTP on port `34181` by default. Override the listeners
-with `AGNT5_GRPC_LISTEN` and `AGNT5_HTTP_LISTEN`.
+Listening beyond loopback requires an API key or JWT secret, and a signing key of your own.
 
-The first workflow slice implements:
-
-- `POST /v1/{component_type}/{component}/submit`
-- `GET /v1/status/{run_id}`
-- `GET /v1/result/{run_id}`
-- worker registration, polling, lease renewal, and completion through
-  `api.v1.EngineService`
-
-The runtime also serves the first `agnt5.protocol.v2` bridge beside the legacy
-worker API. This bridge implements protocol negotiation, worker registration
-and session fencing, idempotent `PollRun`, lease renewal and expiry-driven
-redelivery, and idempotent completed or failed outcomes. It advertises no
-optional capabilities yet. Durable event append, live output streaming,
-referenced payloads, atomic final events, and cancelled, suspended, or yielded
-outcomes return `UNIMPLEMENTED` until their journal projections land.
-
-Authentication is not enabled in this first slice. JWT validation is the next
-gateway boundary; it will remain authentication-only and will not introduce
-roles or permissions.
-
-GitHub Actions caches Cargo dependencies and build outputs between runs. The
-container build uses `cargo-chef` plus BuildKit's GitHub Actions cache so source
-changes do not rebuild the full Rust dependency graph.
-
-## Protocol releases
-
-The canonical public schema is `proto/agnt5/protocol/v2`. After a protocol
-change is merged to `main`, create and push an annotated tag whose version
-matches the `agnt5-proto` version in `proto/Cargo.toml`:
+Or build it from source:
 
 ```bash
-git tag -a protocol/v0.1.0-alpha.3 -m "Protocol v0.1.0-alpha.3"
-git push origin protocol/v0.1.0-alpha.3
+cargo build --release -p agnt5-runtime
+AGNT5_DATABASE_BACKEND=sqlite ./target/release/agnt5-runtime
 ```
 
-The protocol release workflow publishes the matching `agnt5-proto` crate,
-creates `gen/go/v0.1.0-alpha.3`, and publishes the canonical descriptor,
-dependency lock, behavioral specifications, registries, fixtures, and SHA-256
-manifest. See `proto/README.md` for bootstrap and trusted-publishing configuration.
+Configuration, the HTTP API, and how to point SDK workers at the runtime are in
+[`oss-server/README.md`](oss-server/README.md).
+
+## What is here
+
+| Path | What it is |
+| --- | --- |
+| `oss-server/` | The `agnt5-runtime` binary: configuration, HTTP API, startup and shutdown |
+| `crates/service/` | The engine service workers talk to: polling, leases, journal writes |
+| `crates/processor/` | Projects the journal into run state, timers and dispatch |
+| `crates/core/` | Shared types, the journal contract, and the storage traits |
+| `crates/libsql/`, `crates/postgres/` | Storage: SQLite and Turso, and PostgreSQL |
+| `crates/proto/`, `protos/` | The worker protocol |
+
+## Test it
+
+```bash
+cargo test
+```
+
+The PostgreSQL storage tests also run against a database you provide:
+
+```bash
+AGNT5_POSTGRES_TEST_URL=postgresql://user:password@127.0.0.1:5432/db \
+  cargo test -p engine-postgres -- --include-ignored --test-threads=1
+```
+
+## Contributing
+
+This repository is published from AGNT5's main repository, where the hosted platform is also
+built. Issues and pull requests are welcome here; accepted changes are carried over to the main
+repository and come back in the next publish.
+
+## License
+
+[Apache-2.0](LICENSE).

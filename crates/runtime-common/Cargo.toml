@@ -1,0 +1,44 @@
+[package]
+name = "runtime-common"
+publish = false
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license = "Apache-2.0"
+description = "Shared types, backend traits, and configuration for the AGNT5 runtime"
+
+[dependencies]
+engine-proto = { workspace = true }
+engine-core = { workspace = true }
+
+tonic = { workspace = true }
+tower = { workspace = true }
+http = "1"
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-trait = { workspace = true }
+prost = { workspace = true }
+dashmap = { workspace = true }
+
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true }
+pyroscope = { workspace = true }
+sentry = { workspace = true }
+sentry-tracing = { workspace = true }
+
+clap = { workspace = true }
+serde = { workspace = true }
+
+serde_json = { workspace = true }
+tokio-util = { workspace = true }
+
+reqwest = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }

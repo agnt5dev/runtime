@@ -1,0 +1,40 @@
+[package]
+name = "agnt5-runtime"
+publish = false
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license = "Apache-2.0"
+description = "Single-process SQL runtime for the AGNT5 OSS profile"
+
+[dependencies]
+engine-cache = { workspace = true }
+engine-core = { workspace = true }
+engine-libsql = { workspace = true }
+engine-postgres = { workspace = true }
+engine-processor = { workspace = true }
+engine-proto = { workspace = true }
+engine-service = { workspace = true }
+runtime-common = { workspace = true }
+
+anyhow = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true }
+hmac = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+tonic = { workspace = true }
+tonic-reflection = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }

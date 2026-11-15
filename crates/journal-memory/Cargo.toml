@@ -1,0 +1,19 @@
+[package]
+name = "engine-journal-memory"
+publish = false
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license = "Apache-2.0"
+description = "In-memory journal segment for tests, with no storage engine"
+
+[features]
+# Exposes AppendLifecycleTestHook and the segment's install method, which
+# storage tests use to pause an append at a precise point.
+test-hooks = []
+
+[dependencies]
+engine-core = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+async-stream = { workspace = true }

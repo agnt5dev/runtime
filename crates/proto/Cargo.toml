@@ -1,0 +1,21 @@
+[package]
+name = "engine-proto"
+publish = false
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license = "Apache-2.0"
+description = "Generated protobuf types for AGNT5 Engine"
+
+[dependencies]
+tonic = { workspace = true }
+tonic-prost = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+uuid = { workspace = true }
+
+[features]
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+protobuf-src = "2.0"

@@ -1,0 +1,8 @@
+{
+  "key_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "key_id": "key-1",
+  "delivery_id": "delivery-1",
+  "timestamp": 1700000000,
+  "body": "{\"message\":\"héllo\",\"run_id\":\"run-1\"}",
+  "signature": "97a03cff9f6607c5de53983de2cb4ed15b0510cfc81cf1eb7d155d85d07975dd"
+}

@@ -1,44 +1,26 @@
-//! Stable contracts and domain types shared by the community and managed
-//! AGNT5 runtimes.
-
-mod journal;
-mod runtime;
-mod store;
-
-pub use journal::{
-    AppendOutcome, JournalError, JournalRecord, NewJournalRecord, Offset, RecordStream, Segment,
-};
-pub use runtime::{PendingJob, RunState, RuntimeEvent};
-pub use store::{KvOp, MaterializedStore};
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AuthContext {
-    pub subject: String,
-    pub project_id: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeIdentity {
-    pub project_id: String,
-}
-
-impl RuntimeIdentity {
-    pub fn new(project_id: impl Into<String>) -> Result<Self, &'static str> {
-        let project_id = project_id.into();
-        if project_id.trim().is_empty() {
-            return Err("project_id must not be empty");
-        }
-        Ok(Self { project_id })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::RuntimeIdentity;
-
-    #[test]
-    fn project_id_is_required() {
-        assert!(RuntimeIdentity::new("default").is_ok());
-        assert!(RuntimeIdentity::new("  ").is_err());
-    }
-}
+pub mod activation;
+pub mod activation_authority;
+pub mod billing;
+pub mod demand;
+pub mod dispatch_generation;
+pub mod error;
+pub mod experiment_feedback;
+pub mod journal_contract;
+pub mod lease_fence;
+pub mod partition_offset;
+pub mod public_metadata;
+pub mod pull_dispatch;
+pub mod resume_target;
+pub mod routing;
+pub mod run_filter;
+pub mod runtime_events;
+pub mod runtime_work;
+pub mod segment_chain;
+pub mod storage_assessment;
+pub mod storage_contract;
+pub mod storage_version;
+pub mod traits;
+pub mod types;
+pub mod worker_routing;
+pub mod worker_session;
+pub mod workload_identity;

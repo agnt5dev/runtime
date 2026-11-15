@@ -1,0 +1,15 @@
+[package]
+name = "engine-storage-conformance"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license = "Apache-2.0"
+description = "Backend-neutral storage conformance checks for AGNT5 runtime adapters"
+publish = false
+
+[dependencies]
+engine-core = { workspace = true }
+engine-proto = { workspace = true }
+bytes = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }

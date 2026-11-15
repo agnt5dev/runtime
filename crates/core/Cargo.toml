@@ -1,17 +1,25 @@
 [package]
-name = "agnt5-core"
-description = "Stable contracts and domain types for the AGNT5 runtime"
-version.workspace = true
+name = "engine-core"
+publish = false
+version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
+license = "Apache-2.0"
+description = "Core types, traits, and errors for AGNT5 Engine"
 
 [dependencies]
-async-trait.workspace = true
-bytes.workspace = true
-futures-core.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
+engine-proto = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+prost = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+base64 = { workspace = true }
+
+[dev-dependencies]

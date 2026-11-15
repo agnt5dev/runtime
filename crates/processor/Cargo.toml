@@ -1,16 +1,32 @@
 [package]
-name = "agnt5-processor"
-description = "Durable workflow processor for AGNT5"
-version.workspace = true
+name = "engine-processor"
+publish = false
+version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
+license = "Apache-2.0"
 
 [dependencies]
-agnt5-core.workspace = true
-bytes.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-tokio-stream.workspace = true
+engine-cache = { path = "../cache" }
+engine-core = { workspace = true }
+engine-proto = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+opentelemetry = { workspace = true }
+bytes = { workspace = true }
+
+[features]
+default = []
+# Exposes retired_deployments::test_support to other crates' tests.
+test-support = []
+
+[dev-dependencies]
+engine-journal-memory = { workspace = true }
+prost = { workspace = true }
