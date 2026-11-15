@@ -1,6 +1,5 @@
 mod auth;
 mod config;
-mod execution_service;
 mod health;
 mod http;
 mod lease_sweeper;
@@ -21,7 +20,6 @@ use engine_postgres::{PostgresStorage, PostgresWriterLock};
 use engine_processor::timer_poller::{TimerPoller, TimerPollerConfig};
 use engine_processor::{run_single_partition_processor, PartitionProcessorExit};
 use engine_proto::engine_service_server::EngineServiceServer;
-use engine_proto::execution_engine_service_server::ExecutionEngineServiceServer;
 use engine_service::in_process_engine::InProcessEngine;
 use engine_service::{EngineServiceImpl, EngineServiceStore};
 use runtime_common::backend::EngineBackend;
@@ -303,12 +301,6 @@ where
         .build_v1()
         .context("build gRPC reflection service")?;
     let grpc_service = EngineServiceServer::from_arc(service);
-    let execution_service =
-        ExecutionEngineServiceServer::new(execution_service::LegacyExecutionService::new(
-            backend,
-            config.project_id.clone(),
-            config.deployment_id.clone(),
-        ));
     let http_listener = tokio::net::TcpListener::bind(config.http_addr)
         .await
         .with_context(|| format!("bind HTTP listener {}", config.http_addr))?;
@@ -417,7 +409,6 @@ where
         tonic::transport::Server::builder()
             .add_service(reflection)
             .add_service(grpc_service)
-            .add_service(execution_service)
             .serve_with_shutdown(grpc_addr, grpc_cancel.cancelled_owned())
             .await
             .context("gRPC server failed")?;
@@ -588,7 +579,7 @@ mod tests {
     /// The runtime publishes its proto descriptors through gRPC reflection.
     /// This checks that only the public worker contract is compiled in.
     #[test]
-    fn hosted_protos_are_compiled_only_with_the_managed_feature() {
+    fn only_the_public_worker_contract_is_compiled() {
         let descriptors = engine_proto::FILE_DESCRIPTOR_SET;
         let contains = |needle: &str| {
             descriptors
@@ -598,19 +589,6 @@ mod tests {
 
         for public in ["api/v1/engine.proto", "api/v1/worker_routing.proto"] {
             assert!(contains(public), "{public} missing from the build");
-        }
-        for hosted in [
-            "api/v1/coordinator_gossip.proto",
-            "api/v1/runtime_dispatch.proto",
-            "api/v1/replication.proto",
-        ] {
-            assert_eq!(
-                contains(hosted),
-                engine_proto::HOSTED_PROTOS,
-                "{hosted} compiled in: {}, managed feature on: {}",
-                contains(hosted),
-                engine_proto::HOSTED_PROTOS,
-            );
         }
     }
 }

@@ -1,9 +1,7 @@
 /// Generated protobuf types for the AGNT5 Engine.
 ///
-/// Contains the `EngineService` and `ExecutionEngineService` gRPC definitions,
-/// along with core message types: `Record`, `Run`, and all RPC request/response
-/// types. The `managed` feature adds the hosted cluster protocols: coordinator
-/// gossip, runtime dispatch and `ReplicationService`.
+/// Contains the `EngineService` gRPC definition and the core message types:
+/// `Record`, `Run`, and every request and response.
 pub mod api {
     pub mod v1 {
         tonic::include_proto!("api.v1");
@@ -16,10 +14,6 @@ pub mod triggers;
 
 /// Encoded descriptors for gRPC reflection in runtime profiles.
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("engine_descriptor");
-
-/// Whether this build compiled the hosted cluster protocols. They are not
-/// part of this repository, so this is always false.
-pub const HOSTED_PROTOS: bool = false;
 
 // Re-export at crate root for convenience.
 pub use api::v1::*;

@@ -205,8 +205,7 @@ Bearer tokens use HS256, require a future `exp`, honor `nbf`, and must carry a
 ## Pull workers
 
 Run current Python, TypeScript, or Go SDK workers in pull mode against the gRPC
-listener. Set both endpoints to the same gRPC address so worker polling,
-boundary events, and checkpoints use the same runtime:
+listener. Set both endpoints to the runtime's gRPC address:
 
 ```bash
 export AGNT5_PROJECT_ID='local-project'
@@ -216,14 +215,13 @@ export AGNT5_COORDINATOR_ENDPOINT='http://127.0.0.1:34186'
 export AGNT5_ENGINE_URL='http://127.0.0.1:34186'
 ```
 
-Workers write journal events and checkpoints through `EngineService`, which
-checks their lease and session. The older `ExecutionEngineService` stays
-mounted only for the live-update event stream that current SDK workers open at
-startup; those updates go to stream subscribers and are never journaled. Its
-journal-event, checkpoint and event-batch writes, and its managed enqueue,
-sandbox, batch-control, signal and approval RPCs, return `UNIMPLEMENTED`. Use
-the HTTP gateway for run submission, status, results, cancellation, suspension,
-and resume.
+`AGNT5_ENGINE_URL` is required. Workers poll for runs and write journal events,
+checkpoints and live updates through `EngineService`, which checks each write
+against the worker's lease and session. Without it, the SDKs fall back to an
+older execution service this runtime does not serve.
+
+Use the HTTP API for run submission, status, results, cancellation,
+suspension, and resume.
 
 ## Verification
 

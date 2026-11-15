@@ -105,7 +105,7 @@ struct RunListResult {
 
 /// Metadata marking a record as a live update: the engine passes it to stream
 /// subscribers and never writes it to the journal.
-pub const TRANSIENT_EVENT_METADATA_KEY: &str = "_agnt5_transient";
+const TRANSIENT_EVENT_METADATA_KEY: &str = "_agnt5_transient";
 
 fn external_worker_identity<T>(request: &Request<T>) -> Option<ExternalWorkerIdentity> {
     request
