@@ -1,0 +1,27 @@
+[package]
+name = "engine-postgres"
+publish = false
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license = "Apache-2.0"
+description = "PostgreSQL storage adapter for the AGNT5 OSS runtime profile"
+
+[dependencies]
+engine-core = { workspace = true }
+engine-proto = { workspace = true }
+async-trait = { workspace = true }
+async-stream = { workspace = true }
+prost = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+engine-processor = { workspace = true }
+engine-storage-conformance = { workspace = true }
+bytes = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_USER: agnt5
+          POSTGRES_PASSWORD: agnt5
+          POSTGRES_DB: agnt5
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agnt5 -d agnt5"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --workspace
+
+      - name: PostgreSQL storage tests
+        env:
+          AGNT5_POSTGRES_TEST_URL: postgresql://agnt5:agnt5@127.0.0.1:5432/agnt5
+        run: cargo test --locked -p engine-postgres -- --include-ignored --test-threads=1

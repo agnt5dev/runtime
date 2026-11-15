@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "agnt5.dev/platform/pkg/pb/api/v1;v1";
+
+// Routing types the runtime derives from what a worker says it serves.
+// They are part of the public worker contract, so the OSS runtime can use
+// them without the hosted coordinator gossip protocol.
+
+// ComponentRouteSpec is the minimum every dispatch lookup and inventory read
+// needs. Schemas, definitions, and triggers remain in the control-plane
+// component directory; the small config/metadata maps are retained so
+// component-local retry policy and discovery metadata survive gossip.
+message ComponentRouteSpec {
+  string name = 1;
+  int32 component_type = 2;
+  map<string, string> config = 3;
+  map<string, string> metadata = 4;
+}
+
+// PullReadyDelegation addresses one projected, claimable run to one remote
+// coordinator. It is intentionally exact-run and short-lived so it cannot
+// turn into a second queue or grant durable assignment authority.
+//
+// Hosted coordinators send it to each other over gossip. It lives in this
+// public file only because the shared pull-assignment path in the runtime
+// service still carries it; the single-process OSS runtime never creates one.
+message PullReadyDelegation {
+  string project_id = 1;
+  string deployment_id = 2;
+  string run_id = 3;
+  uint32 partition_id = 4;
+  uint64 owner_epoch = 5;
+  string owner_coordinator_id = 6;
+  string delegate_coordinator_id = 7;
+  uint64 ready_offset = 8;
+  int64 ready_at_ms = 9;
+  int64 expires_at_ms = 10;
+  string component_name = 11;
+  int32 component_type = 12;
+}

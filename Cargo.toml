@@ -1,0 +1,103 @@
+[workspace]
+resolver = "2"
+members = [
+    "oss-server",
+    "crates/core",
+    "crates/cache",
+    "crates/proto",
+    "crates/processor",
+    "crates/libsql",
+    "crates/postgres",
+    "crates/service",
+    "crates/runtime-common",
+    "crates/journal-memory",
+    "crates/storage-conformance",
+]
+
+# No workspace-wide license. The crates the OSS runtime is built from declare
+# Apache-2.0 themselves; hosted-only crates are proprietary and declare none.
+# Every crate sets `publish = false`, because the shared crates still contain
+# hosted code and must not reach crates.io by accident.
+[workspace.package]
+edition = "2021"
+authors = ["AGNT5 Team"]
+
+[profile.dev]
+debug = 1
+
+[workspace.dependencies]
+# Proto / gRPC
+engine-proto = { path = "crates/proto" }
+engine-core = { path = "crates/core" }
+engine-journal-memory = { path = "crates/journal-memory" }
+engine-cache = { path = "crates/cache" }
+engine-processor = { path = "crates/processor" }
+engine-storage-conformance = { path = "crates/storage-conformance" }
+engine-libsql = { path = "crates/libsql" }
+engine-postgres = { path = "crates/postgres" }
+engine-service = { path = "crates/service" }
+runtime-common = { path = "crates/runtime-common" }
+tonic = "0.14.1"
+tonic-prost = "0.14.1"
+tonic-reflection = "0.14.1"
+prost = "0.14.1"
+prost-types = "0.14.1"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+tokio-util = "0.7"
+async-trait = "0.1"
+async-stream = "0.3"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Logging / tracing / telemetry
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
+opentelemetry = "0.30"
+opentelemetry_sdk = { version = "0.30", features = ["rt-tokio", "metrics", "logs"] }
+opentelemetry-otlp = { version = "0.30", features = ["trace", "metrics", "logs", "grpc-tonic"] }
+tracing-opentelemetry = "0.31"
+opentelemetry-appender-tracing = "0.30"
+pyroscope = { version = "2", features = ["backend-jemalloc"] }
+sentry = { version = "0.48", default-features = false, features = [
+    "backtrace",
+    "contexts",
+    "panic",
+    "reqwest",
+    "rustls",
+] }
+sentry-tracing = { version = "0.48", default-features = false }
+sqlx = { version = "0.9", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls-ring",
+    "postgres",
+    "macros",
+    "migrate",
+] }
+libsql = { version = "=0.9.30", default-features = false, features = ["core", "remote", "tls"] }
+
+# Data structures
+bytes = "1.0"
+dashmap = "6"
+uuid = { version = "1.0", features = ["v4", "v5", "v7", "serde"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# HTTP / CLI
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip", "decompression-gzip"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+clap = { version = "=4.5.37", features = ["derive", "env"] }
+
+# Testing
+tempfile = "3"
