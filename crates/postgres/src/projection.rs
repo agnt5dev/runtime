@@ -839,8 +839,7 @@ impl ProjectionCommitter for PostgresStorage {
                 | ProjectionMutation::DeleteRunQueryArchiveIntent { .. }
                 | ProjectionMutation::PutRunQueryArchiveReceipt { .. } => {
                     return Err(EngineError::InvalidArgument(
-                        "PostgreSQL OSS profile does not support managed archive mutations"
-                            .to_string(),
+                        "PostgreSQL profile does not support managed archive mutations".to_string(),
                     ));
                 }
             }

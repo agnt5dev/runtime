@@ -1206,7 +1206,7 @@ impl<T: MaterializedStore + ?Sized> LeaseWorkStore for T {
 
 /// Managed run-retention maintenance port.
 ///
-/// This is an optional managed-profile behavior: the PostgreSQL OSS profile
+/// This is an optional managed-profile behavior: the PostgreSQL profile
 /// does not need to imitate local RocksDB reclamation or S3 re-archive repair.
 #[async_trait]
 pub trait RunRetentionStore: Send + Sync {

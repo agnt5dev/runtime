@@ -138,7 +138,7 @@ async fn metrics(State(state): State<AppState>) -> Response {
          agnt5_oss_storage_idle_connections{{backend=\"{}\"}} {}\n",
         backend, connections, backend, idle_connections,
     );
-    // Preserve the PostgreSQL-specific metric names shipped by the initial OSS
+    // Preserve the PostgreSQL-specific metric names shipped by the initial single-process
     // profile so existing scrapers and dashboards do not break on upgrade.
     if backend == "postgres" {
         body.push_str(&format!(
@@ -1018,7 +1018,7 @@ fn conflict(run_id: &str, status: &str, operation: &str) -> Response {
 }
 
 fn internal_error(context: &str, error: impl std::fmt::Display) -> Response {
-    tracing::error!(%error, context, "OSS HTTP request failed");
+    tracing::error!(%error, context, "HTTP request failed");
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(json!({"error": format!("{context}: {error}")})),

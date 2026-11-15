@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "oss-server",
+    "server",
     "crates/core",
     "crates/cache",
     "crates/proto",
@@ -14,10 +14,8 @@ members = [
     "crates/storage-conformance",
 ]
 
-# No workspace-wide license. The crates the OSS runtime is built from declare
-# Apache-2.0 themselves; hosted-only crates are proprietary and declare none.
-# Every crate sets `publish = false`, because the shared crates still contain
-# hosted code and must not reach crates.io by accident.
+# Every crate is Apache-2.0 and declares it itself. None is published to
+# crates.io yet.
 [workspace.package]
 edition = "2021"
 authors = ["AGNT5 Team"]

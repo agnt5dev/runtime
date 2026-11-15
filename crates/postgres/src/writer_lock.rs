@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::postgres_error;
 
-/// Session-scoped single-writer authority for one OSS runtime namespace.
+/// Session-scoped single-writer authority for one runtime namespace.
 ///
 /// This connection is deliberately separate from the query pool. PostgreSQL
 /// releases the advisory lock when the dedicated session closes, including

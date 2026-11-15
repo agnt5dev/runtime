@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! PostgreSQL storage profile for the single-active OSS runtime.
+//! PostgreSQL storage profile for the single-active runtime.
 //!
 //! The adapter owns SQL schema and transaction details. Runtime processors
 //! continue to operate on backend-neutral journal and projection contracts.

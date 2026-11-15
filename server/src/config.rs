@@ -62,7 +62,7 @@ pub struct Config {
     pub grpc_addr: SocketAddr,
 
     /// Stable runtime node identifier used in status and telemetry.
-    #[arg(long, env = "AGNT5_NODE_ID", default_value = "oss-runtime-1")]
+    #[arg(long, env = "AGNT5_NODE_ID", default_value = "runtime-1")]
     pub node_id: String,
 
     /// Maximum PostgreSQL pool size. The advisory lock uses one additional
