@@ -13,6 +13,7 @@ pub enum DatabaseBackend {
 #[derive(Clone, Debug, Parser)]
 #[command(
     name = "agnt5-runtime",
+    version,
     about = "Single-process AGNT5 runtime backed by PostgreSQL, SQLite, or Turso"
 )]
 pub struct Config {
