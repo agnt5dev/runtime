@@ -1,0 +1,64 @@
+{
+  "contract": "durable_activation_v1",
+  "journal_version": 2,
+  "identity": {
+    "project_id": "project-1",
+    "run_id": "run-1",
+    "parent_activation_id": "parent-1",
+    "kind": 1,
+    "stable_key": "step/load",
+    "activation_id": "actv1_9LU0V32sQX2U3CaQSCW37t-WWSvBAe04qTWqTD6mN-w",
+    "input_digest_base64": "yWxtW+jQihLntc3Bsgf6ayQwl0yGgD2IkWdedv2ZLCA=",
+    "definition_digest_base64": "TE7Rr7/aoeTDv3u7gtcwzst+OE2pHupPPMCT/VRVJNY="
+  },
+  "digest_vectors": {
+    "canonical_input_utf8": "[\"object\",[[\"count\",[\"i64\",\"2\"]],[\"name\",[\"string\",\"alpha\"]]]]",
+    "input_sha256_base64": "+6akLLE8ses5QeK62PHHkobScg7gWMdae1Zh105nCzM=",
+    "artifact_sha256_base64": "0lJSBAIElTtKmSY0S/XeONW7020B5x6yW0xopTX5kkg=",
+    "definition_component": "workflow",
+    "definition_version": "v1",
+    "definition_config_utf8": "[\"object\",[]]",
+    "definition_sha256_base64": "iTziD0lZ9kXRtq7RUj58/nzuTDQQtdgYp+MDNrAGVmw="
+  },
+  "canonicalization": {
+    "state_mutation_order": [
+      "state-a",
+      "state-z"
+    ],
+    "outbox_intent_order": [
+      "intent-a",
+      "intent-z"
+    ]
+  },
+  "record_names": {
+    "STEP": "workflow.step",
+    "TIMER": "workflow.step",
+    "FUNCTION": "function",
+    "MODEL": "lm",
+    "TOOL": "tool_call",
+    "CHILD": "agent"
+  },
+  "transitions": [
+    "started",
+    "retry_started",
+    "completed",
+    "failed",
+    "suspended",
+    "cancelled",
+    "unknown_outcome",
+    "snapshot"
+  ],
+  "metadata_marker": {
+    "activation_contract": "durable_activation_v2",
+    "keys": [
+      "activation_id",
+      "activation_attempt",
+      "activation_transition",
+      "activation_kind"
+    ]
+  },
+  "canonical_records_json": {
+    "started": "{\"event\":{\"activation_id\":\"actv1_9LU0V32sQX2U3CaQSCW37t-WWSvBAe04qTWqTD6mN-w\",\"attempt\":1,\"child\":null,\"decision\":\"execute\",\"definition_digest\":\"TE7Rr7_aoeTDv3u7gtcwzst-OE2pHupPPMCT_VRVJNY\",\"fence_token\":\"ZmVuY2Utd29ya2VyLWE\",\"input_data\":{\"order_id\":42},\"input_digest\":\"yWxtW-jQihLntc3Bsgf6ayQwl0yGgD2IkWdedv2ZLCA\",\"kind\":1,\"lease_authority\":\"bGVhc2UtYXV0aG9yaXR5\",\"name\":\"load\",\"parent_activation_id\":\"parent-1\",\"previous_attempt\":0,\"project_id\":\"project-1\",\"recovery_policy\":1,\"run_authority\":\"cnVuLWF1dGhvcml0eQ\",\"run_id\":\"run-1\",\"stable_key\":\"step/load\",\"transition\":\"started\",\"worker_session_id\":\"worker-a\"},\"version\":2}",
+    "completed": "{\"event\":{\"activation_id\":\"actv1_9LU0V32sQX2U3CaQSCW37t-WWSvBAe04qTWqTD6mN-w\",\"attempt\":1,\"child\":null,\"definition_digest\":\"TE7Rr7_aoeTDv3u7gtcwzst-OE2pHupPPMCT_VRVJNY\",\"duration_ms\":null,\"evidence\":[],\"fence_token\":\"ZmVuY2Utd29ya2VyLWE\",\"input_digest\":\"yWxtW-jQihLntc3Bsgf6ayQwl0yGgD2IkWdedv2ZLCA\",\"kind\":1,\"name\":\"load\",\"outbox_intents\":[{\"idempotency_key\":\"downstream-a\",\"intent_id\":\"intent-a\",\"kind\":\"http\",\"payload\":{\"inline_b64\":\"YS1lZmZlY3Q\"}},{\"idempotency_key\":\"downstream-z\",\"intent_id\":\"intent-z\",\"kind\":\"http\",\"payload\":{\"inline_b64\":\"ei1lZmZlY3Q\"}}],\"output\":{\"inline_b64\":\"cmVzdWx0\"},\"output_digest\":\"9qIU96X82gws7pZgt_wp9WSePGiq1I4g6VATfJiROmg\",\"parent_activation_id\":\"parent-1\",\"project_id\":\"project-1\",\"recovery_policy\":1,\"run_id\":\"run-1\",\"stable_key\":\"step/load\",\"started_journal_offset\":7,\"state_mutations\":[{\"data\":\"YS12YWx1ZQ\",\"data_type\":\"json\",\"entity_key\":\"a\",\"entity_type\":\"workflow\",\"expected_version\":0,\"operation_id\":\"state-a\",\"scope\":\"run\",\"scope_id\":\"run-1\"},{\"data\":\"ei12YWx1ZQ\",\"data_type\":\"json\",\"entity_key\":\"z\",\"entity_type\":\"workflow\",\"expected_version\":0,\"operation_id\":\"state-z\",\"scope\":\"run\",\"scope_id\":\"run-1\"}],\"transition\":\"completed\",\"usage\":null},\"version\":2}"
+  }
+}

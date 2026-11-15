@@ -1,0 +1,1625 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "google/protobuf/timestamp.proto";
+import "api/v1/common.proto";
+import "api/v1/worker_coordinator.proto";
+
+option go_package = "agnt5.dev/platform/pkg/pb/api/v1;v1";
+
+// EngineService is the core orchestration and storage engine.
+// SDK workers connect here for all hot-path operations:
+// event writes, memoization lookups, run state reads.
+service EngineService {
+  // --- Write path ---
+
+  // Append a single record to the journal log.
+  rpc Append(AppendRequest) returns (AppendResponse);
+
+  // Append multiple records atomically when they route to one journal
+  // partition. A cross-partition request is rejected before mutation.
+  rpc AppendBatch(AppendBatchRequest) returns (AppendBatchResponse);
+
+  // Append the records of one observed run: a run built from a customer's
+  // OpenTelemetry traces, which no worker owns, so no worker lease is
+  // checked. Every record must carry metadata origin=otlp and belong to the
+  // same run, and only span events and run lifecycle records are accepted.
+  // A request that breaks these rules is rejected before anything is
+  // written. Records for a run that has already ended are dropped.
+  rpc AppendObserved(AppendObservedRequest) returns (AppendObservedResponse);
+
+  // --- Durable execution (worker write path) ---
+
+  // Checkpoint persists a durable step checkpoint and returns memoization status.
+  // On STEP_STARTED, looks up prior completion by step_key and returns cached output
+  // if found. On STEP_COMPLETED/STEP_FAILED, appends a record to the journal.
+  rpc Checkpoint(CheckpointRequest) returns (CheckpointResponse);
+
+  // BeginActivation atomically admits or replays one logical durable activation.
+  // The journal aggregate, not a projection, decides the returned outcome.
+  rpc BeginActivation(BeginActivationRequest) returns (BeginActivationResponse);
+
+  // CompleteActivation commits one fenced logical result together with its state
+  // mutations and durable outbox intents.
+  rpc CompleteActivation(CompleteActivationRequest) returns (CompleteActivationResponse);
+
+  // FailActivation records one fenced failure and its retry/uncertainty decision.
+  rpc FailActivation(FailActivationRequest) returns (FailActivationResponse);
+
+  // SuspendActivation atomically parks one fenced activation, pauses its run,
+  // and schedules the durable timer that may resume it.
+  rpc SuspendActivation(SuspendActivationRequest) returns (SuspendActivationResponse);
+
+  // EventStream accepts a stream of ephemeral events (tokens, progress, logs)
+  // from SDK workers. No journal persistence — real-time SSE delivery only.
+  rpc EventStream(stream EventStreamMessage) returns (EventStreamAck);
+
+  // --- Pull-based job queue ---
+
+  // PollJobs claims pending jobs from the durable queue for a worker.
+  rpc PollJobs(PollJobsRequest) returns (PollJobsResponse);
+
+  // RegisterWorkerSession binds a worker identity to a deployment lane before
+  // parked single-job polling. SPIFFE/SPIRE can later authenticate the same
+  // worker identity; the session remains useful for policy and rollout state.
+  rpc RegisterWorkerSession(RegisterWorkerSessionRequest) returns (RegisterWorkerSessionResponse);
+
+  // PollJob parks a single worker slot until one job is available or wait_ms
+  // elapses. Empty response means timeout.
+  rpc PollJob(PollJobRequest) returns (PollJobResponse);
+
+  // RenewJobLease extends the active lease for a currently assigned job.
+  rpc RenewJobLease(RenewJobLeaseRequest) returns (RenewJobLeaseResponse);
+
+  // ReportWorkerCapacity publishes the worker's current pull-slot state for
+  // autoscaling and heartbeat freshness.
+  rpc ReportWorkerCapacity(ReportWorkerCapacityRequest) returns (ReportWorkerCapacityResponse);
+
+  // CompleteJob reports the result of a previously polled job.
+  rpc CompleteJob(CompleteJobRequest) returns (CompleteJobResponse);
+
+  // --- Read path (record cache + materialized store) ---
+
+  // Read all events for a run, ordered by timestamp.
+  rpc ReadByRunID(ReadByRunIDRequest) returns (ReadByRunIDResponse);
+
+  // Find a completed step by its memoization key.
+  rpc FindByStepKey(FindByStepKeyRequest) returns (FindByStepKeyResponse);
+
+  // Get the current state of a run.
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+
+  // List live worker routing entries for an exact route key.
+  rpc ListRoutingWorkers(ListRoutingWorkersRequest) returns (ListRoutingWorkersResponse);
+
+  // --- Tailing (real-time SSE replay, processor catch-up) ---
+
+  // Tail the log from a given offset. Server-streaming.
+  rpc Tail(TailRequest) returns (stream TailResponse);
+
+  // --- Entity state ---
+
+  // Get entity state by scoped key.
+  rpc GetEntityState(GetEntityStateRequest) returns (GetEntityStateResponse);
+
+  // Save entity state. Appends a workflow.state.changed record to the journal,
+  // which the processor materializes. Supports optimistic locking via expected_version.
+  rpc PutEntityState(PutEntityStateRequest) returns (PutEntityStateResponse);
+
+  // --- Approvals ---
+
+  rpc GetApproval(GetApprovalRequest) returns (GetApprovalResponse);
+  rpc ListApprovals(EngineListApprovalsRequest) returns (EngineListApprovalsResponse);
+
+  // --- Signals ---
+
+  rpc GetSignal(GetSignalRequest) returns (GetSignalResponse);
+  rpc LookupSignal(LookupSignalRequest) returns (LookupSignalResponse);
+  rpc ListSignals(ListSignalsRequest) returns (ListSignalsResponse);
+
+  // --- Timers ---
+
+  rpc GetTimer(GetTimerRequest) returns (GetTimerResponse);
+  rpc ListTimers(ListTimersRequest) returns (ListTimersResponse);
+  rpc ListDueTimers(ListDueTimersRequest) returns (ListDueTimersResponse);
+
+  // --- Jobs + Batches ---
+
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  rpc ListJobsByRun(ListJobsByRunRequest) returns (ListJobsByRunResponse);
+  rpc ListJobsByBatch(ListJobsByBatchRequest) returns (ListJobsByBatchResponse);
+  rpc GetBatch(GetBatchRequest) returns (GetBatchResponse);
+
+  // --- Sessions + Messages ---
+
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc GetMessage(GetMessageRequest) returns (GetMessageResponse);
+  rpc ListMessagesByCorrelation(ListMessagesByCorrelationRequest) returns (ListMessagesByCorrelationResponse);
+
+  // --- Run listing (hot projection and native query lake) ---
+
+  // List runs with filtering and pagination over hot rows and committed Vortex history.
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+
+  // Get aggregated run statistics (count by status, component type).
+  rpc GetRunStats(GetRunStatsRequest) returns (GetRunStatsResponse);
+
+  // Read-only SQL over the caller's project metadata. Disabled unless the
+  // runtime's SQL gate explicitly includes the project. Payloads are hidden.
+  rpc Query(QueryRequest) returns (QueryResponse);
+
+  // --- Inbound Event Listing (CF_EVENTS_HOT hot index) ---
+
+  // List inbound events a project received, newest-first. Backs the
+  // Studio "Events" page. Reads the local events hot index (no cold tier
+  // today); each item is a compact summary, full payload fetched via
+  // ReadByRunId on the event_run_id.
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+
+  // --- Admin ---
+
+  // Get engine cluster status.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+// =============================================================================
+// Core Types
+// =============================================================================
+
+// Record is the fundamental unit stored in the journal log.
+// All orchestration state is derived from records.
+message Record {
+  // Offset assigned by the sequencer (monotonically increasing).
+  uint64 offset = 1;
+
+  // Tenant isolation.
+  string project_id = 2;
+
+  // Run this record belongs to.
+  string run_id = 3;
+
+  // Event type determines how the processor materializes this record.
+  // Examples: "run.enqueued", "run.started", "run.completed", "run.failed",
+  //           "step.completed", "workflow.state.changed",
+  //           "timer.scheduled", "timer.fired", "timer.canceled",
+  //           "approval.requested", "approval.resolved",
+  //           "signal.raised", "signal.received",
+  //           "batch.created", "job.enqueued", "job.claimed", "job.completed",
+  //           "session.created", "session.updated",
+  //           "message.sent", "message.delivered", "message.failed",
+  //           "lm.call.started", "lm.call.completed",
+  //           "tool.call.started", "tool.call.completed",
+  //           "agent.iteration.started", "agent.iteration.completed"
+  string event_type = 4;
+
+  // JSON-encoded event payload.
+  bytes data = 5;
+
+  // Nanosecond-precision timestamp (source time from SDK, or server time).
+  int64 timestamp_ns = 6;
+
+  // Step memoization key. Present for step completion events.
+  // Used for O(1) memoization lookup during workflow replay.
+  string step_key = 7;
+
+  // Correlation ID for pairing start/complete events.
+  string correlation_id = 8;
+
+  // Parent event ID for building event hierarchy.
+  string parent_event_id = 9;
+
+  // Display metadata for UI rendering.
+  map<string, string> metadata = 10;
+
+  // Data format: "json" or "binary".
+  string data_type = 11;
+
+  // xxHash64 checksum of data (before compression).
+  bytes data_checksum = 12;
+
+  // Whether data is zstd-compressed.
+  bool data_compressed = 13;
+}
+
+// =============================================================================
+// Write Path Messages
+// =============================================================================
+
+message AppendRequest {
+  Record record = 1;
+}
+
+message AppendResponse {
+  // Assigned offset in the log.
+  uint64 offset = 1;
+
+  // Nanosecond timestamp assigned by the engine.
+  int64 timestamp_ns = 2;
+}
+
+message AppendBatchRequest {
+  repeated Record records = 1;
+}
+
+message AppendBatchResponse {
+  // Offsets assigned to each record (same order as input).
+  repeated uint64 offsets = 1;
+
+  // Number of input records successfully appended. This is always in
+  // 0..=offsets.size(), even when the runtime expands an input internally.
+  int32 written_count = 2;
+}
+
+message AppendObservedRequest {
+  // Records of one observed run, in the order to append them.
+  repeated Record records = 1;
+}
+
+// What happened to one record of an AppendObserved request.
+enum ObservedRecordOutcome {
+  OBSERVED_RECORD_OUTCOME_UNSPECIFIED = 0;
+  // Appended to the journal.
+  OBSERVED_RECORD_OUTCOME_WRITTEN = 1;
+  // Dropped because the run had already ended.
+  OBSERVED_RECORD_OUTCOME_RUN_ENDED = 2;
+  // Dropped because the run doesn't exist and the batch doesn't open it:
+  // a trace's spans that arrived with no recognized AI span.
+  OBSERVED_RECORD_OUTCOME_NO_RUN = 3;
+}
+
+message AppendObservedResponse {
+  // One outcome per input record, in input order.
+  repeated ObservedRecordOutcome outcomes = 1;
+
+  // The offset of each written record, in input order, and 0 for a record
+  // that was dropped.
+  repeated uint64 offsets = 2;
+}
+
+// =============================================================================
+// Read Path Messages
+// =============================================================================
+
+message ReadByRunIDRequest {
+  string project_id = 1;
+  string run_id = 2;
+
+  // Optional: only return events after this timestamp.
+  int64 from_timestamp_ns = 3;
+
+  // Optional: filter by event types (empty = all).
+  repeated string event_types = 4;
+
+  // Optional exact invocation lookup used by submission admission. Requires
+  // from_timestamp_ns=0 and event_types=[run.queued, batch.created]. New
+  // servers consult the journal idempotency index; old servers safely retain
+  // the complete-history read. This is advisory until the append is accepted.
+  string invocation_idempotency_key = 5;
+}
+
+message ReadByRunIDResponse {
+  repeated Record records = 1;
+}
+
+message FindByStepKeyRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string step_key = 3;
+}
+
+message FindByStepKeyResponse {
+  // The step completion record, if found.
+  Record record = 1;
+
+  // Whether the step was found.
+  bool found = 2;
+}
+
+message GetRunRequest {
+  string project_id = 1;
+  string run_id = 2;
+}
+
+message GetRunResponse {
+  Run run = 1;
+  bool found = 2;
+}
+
+message ListRoutingWorkersRequest {
+  string project_id = 1;
+  string deployment_id = 2;
+  // COMPONENT_TYPE_UNSPECIFIED with empty component_name returns all routing
+  // worker snapshots for the deployment.
+  int32 component_type = 3;
+  string component_name = 4;
+}
+
+message ListRoutingWorkersResponse {
+  repeated WorkerInfo workers = 1;
+}
+
+// Run represents the materialized state of a workflow/function execution.
+message Run {
+  string project_id = 1;
+  string run_id = 2;
+  string deployment_id = 3;
+  string component_name = 4;
+  string component_type = 5;
+
+  // Lifecycle status: "enqueued", "started", "running", "completed", "failed", "cancelled", "paused"
+  string status = 6;
+
+  // Error details (present when status = "failed").
+  string error_message = 7;
+  string error_code = 8;
+
+  // Input/output data references.
+  bytes input_data = 9;
+  bytes output_data = 10;
+
+  // Timing.
+  google.protobuf.Timestamp submitted_at = 11;
+  google.protobuf.Timestamp started_at = 12;
+  google.protobuf.Timestamp completed_at = 13;
+  int64 duration_ms = 14;
+  google.protobuf.Timestamp gateway_received_at = 26;
+  google.protobuf.Timestamp assigned_at = 27;
+
+  // Trace context.
+  string trace_id = 15;
+
+  // Execution metadata.
+  map<string, string> metadata = 16;
+
+  // --- Lease / dispatch fields (unified lease-based dispatch) ---
+  //
+  // A run with a non-empty `lease_id` is currently leased to a worker.
+  // Only the holder of the current `lease_id` may complete the run — this
+  // is the fence token that prevents a stale worker from acking a run that
+  // has been re-leased to another worker after expiry.
+
+  // ULID — unique per lease creation. Empty when no active lease.
+  string lease_id             = 17;
+
+  // Worker that currently holds the lease. Empty when no active lease.
+  string lease_worker_id      = 18;
+
+  // Wall-clock expiry in milliseconds since Unix epoch.
+  int64  lease_expires_at_ms  = 19;
+
+  // Wall-clock lease creation time in milliseconds since Unix epoch.
+  int64  lease_created_at_ms  = 20;
+
+  // Monotonic counter incremented on each lease creation. Observability aid;
+  // fencing is done via lease_id.
+  uint32 lease_epoch          = 21;
+
+  // Total delivery attempts (incremented on re-lease after expiry/failure).
+  uint32 attempt              = 22;
+
+  // Dispatch priority class. Drives queueing and headroom reservation.
+  Priority priority           = 23;
+
+  // Effective lease timeout for this lease (ms). Resolved at lease creation
+  // time from the most-specific of: per-dispatch override → component
+  // registration default → system default.
+  int64  lease_timeout_ms     = 24;
+
+  // Per-model LLM usage breakdown, accumulated from lm.* journal events.
+  // Aggregates (total tokens / total cost) are NOT pre-computed — clients sum
+  // across this list when they need a single number. Different models have
+  // different pricing, so per-model is the correct granularity.
+  repeated ModelUsage model_usage = 25;
+
+  // Workspace UUID — the auth scope that owns this run. Stamped by the
+  // gateway from AuthContext.workspace_id onto run.queued metadata, then
+  // copied here by the projection. Used as a top-level Hive partition key
+  // in S3 Parquet (workspace=<id>/project=<id>/deployment=<id>/day=...).
+  string workspace_id = 29;
+
+  // Journal offset of the run's first dispatch record: its first
+  // `run.assigned`, or its first `run.started` when a fast worker's start
+  // lands before the processor's assignment. Billing counts a run start only
+  // at this offset, because lease expiry, retries and resume each dispatch
+  // the run again. Set once by the run projection and never cleared, not
+  // even when the row is reset. Field 28 was a removed field; don't reuse it.
+  optional uint64 first_dispatch_offset = 30;
+}
+
+// LLM usage for a specific (provider, model) pair within a single run.
+message ModelUsage {
+  string provider = 1;
+  string model = 2;
+  int64 input_tokens = 3;
+  int64 output_tokens = 4;
+  int64 cached_tokens = 5;
+  // Cost in USD * 1_000_000. Already priced at this model's rates.
+  int64 cost_micros = 6;
+  // Number of LM events (lm.completed + lm.call.completed + lm.stream.completed)
+  // observed for this model in this run.
+  int32 call_count = 7;
+}
+
+// =============================================================================
+// Tail Messages
+// =============================================================================
+
+message TailRequest {
+  // Start tailing from this offset (inclusive).
+  uint64 from_offset = 1;
+
+  // Optional: filter by tenant.
+  string project_id = 2;
+
+  // Optional: filter by run.
+  string run_id = 3;
+}
+
+message TailResponse {
+  Record record = 1;
+}
+
+// =============================================================================
+// Admin Messages
+// =============================================================================
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  // Node identity.
+  string node_id = 1;
+
+  // Cluster role: "sequencer", "follower", "standalone"
+  string role = 2;
+
+  // Current log tail offset.
+  uint64 tail_offset = 3;
+
+  // Processor checkpoint (last materialized offset).
+  uint64 processor_offset = 4;
+
+  // Number of active segments.
+  int32 active_segments = 5;
+
+  // Cache stats.
+  int64 cache_entries = 6;
+  int64 cache_bytes = 7;
+
+  // Uptime in seconds.
+  int64 uptime_seconds = 8;
+
+  // Per-partition storage readiness.
+  //
+  // A node-wide verdict cannot express "seven of eight partitions can serve",
+  // and a caller deciding readiness needs the conjunction of this with the
+  // processor, integrity, ownership and quorum state it holds locally.
+  repeated PartitionStorageReadiness partition_readiness = 9;
+}
+
+// Whether one partition's storage can serve.
+message PartitionStorageReadiness {
+  uint32 partition_id = 1;
+  bool ready = 2;
+  // Populated only when not ready.
+  string failure = 3;
+}
+
+// =============================================================================
+// Entity State Messages
+// =============================================================================
+
+message GetEntityStateRequest {
+  string project_id = 1;
+  string entity_type = 2;
+  string entity_key = 3;
+  string scope = 4;       // "global", "run", "session", "user"
+  string scope_id = 5;    // run_id, session_id, user_id (empty for global)
+}
+
+message GetEntityStateResponse {
+  // Whether the entity was found.
+  bool found = 1;
+
+  // JSON-encoded state data.
+  bytes state_json = 2;
+
+  // Current version for optimistic locking.
+  int64 version = 3;
+}
+
+message PutEntityStateRequest {
+  string project_id = 1;
+  string entity_type = 2;
+  string entity_key = 3;
+  string scope = 4;
+  string scope_id = 5;
+
+  // Full state snapshot (JSON).
+  bytes state_json = 6;
+
+  // Expected version for optimistic locking.
+  // Use 0 for initial creation.
+  int64 expected_version = 7;
+
+  // Run ID to associate the journal event with.
+  string run_id = 8;
+
+  // Pull-worker authority. When run_id is set, every field below is required
+  // and must match the active parked-poll assignment.
+  string worker_id = 9;
+  string worker_session_id = 10;
+  string lease_id = 11;
+  optional uint32 attempt = 12;
+
+  // Stable across retries of one logical write. The journal uses this to
+  // collapse a lost-response retry without collapsing distinct state updates.
+  string operation_id = 13;
+}
+
+message PutEntityStateResponse {
+  // New version after save.
+  int64 new_version = 1;
+}
+
+// =============================================================================
+// Approval Messages
+// =============================================================================
+
+message Approval {
+  string approval_id = 1;
+  string run_id = 2;
+  string project_id = 3;
+  string name = 4;
+  bytes payload = 5;
+  repeated string required_roles = 6;
+  repeated string notify_channels = 7;
+  string status = 8;              // pending, approved, rejected, expired
+  string decided_by = 9;
+  string decision_reason = 10;
+  bytes decision_payload = 11;
+  string dedupe_id = 12;
+  google.protobuf.Timestamp requested_at = 13;
+  google.protobuf.Timestamp expires_at = 14;
+  google.protobuf.Timestamp decided_at = 15;
+}
+
+message GetApprovalRequest {
+  string project_id = 1;
+  string approval_id = 2;
+  string run_id = 3;
+}
+
+message GetApprovalResponse {
+  Approval approval = 1;
+  bool found = 2;
+}
+
+message EngineListApprovalsRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string status_filter = 3;  // empty = all
+}
+
+message EngineListApprovalsResponse {
+  repeated Approval approvals = 1;
+}
+
+// =============================================================================
+// Signal Messages
+// =============================================================================
+
+message Signal {
+  string signal_id = 1;
+  string run_id = 2;
+  string project_id = 3;
+  string signal_name = 4;
+  string waiting_step = 5;
+  bytes payload = 6;
+  string status = 7;              // waiting, received, acked, expired
+  string acked_by = 8;
+  int32 version = 9;
+  string event_id = 10;
+  google.protobuf.Timestamp received_at = 11;
+  google.protobuf.Timestamp acknowledged_at = 12;
+  google.protobuf.Timestamp expires_at = 13;
+}
+
+message GetSignalRequest {
+  string project_id = 1;
+  string signal_id = 2;
+  string run_id = 3;
+}
+
+message GetSignalResponse {
+  Signal signal = 1;
+  bool found = 2;
+}
+
+message LookupSignalRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string signal_name = 3;
+  string waiting_step = 4;
+}
+
+message LookupSignalResponse {
+  Signal signal = 1;
+  bool found = 2;
+}
+
+message ListSignalsRequest {
+  string project_id = 1;
+  string run_id = 2;
+}
+
+message ListSignalsResponse {
+  repeated Signal signals = 1;
+}
+
+// =============================================================================
+// Timer Messages
+// =============================================================================
+
+message Timer {
+  string timer_id = 1;
+  string run_id = 2;
+  string component_id = 3;
+  string project_id = 4;
+  string timer_key = 5;
+  string waiting_step = 6;
+  string schedule_type = 7;       // delay, cron, absolute
+  bytes schedule_payload = 8;
+  bool recurring = 9;
+  string status = 10;             // scheduled, fired, canceled, expired
+  google.protobuf.Timestamp fire_at = 11;
+  google.protobuf.Timestamp fired_at = 12;
+  google.protobuf.Timestamp canceled_at = 13;
+  string canceled_by = 14;
+  google.protobuf.Timestamp expired_at = 15;
+  string event_id = 16;
+}
+
+message GetTimerRequest {
+  string project_id = 1;
+  string timer_id = 2;
+  string run_id = 3;
+}
+
+message GetTimerResponse {
+  Timer timer = 1;
+  bool found = 2;
+}
+
+message ListTimersRequest {
+  string project_id = 1;
+  string run_id = 2;
+}
+
+message ListTimersResponse {
+  repeated Timer timers = 1;
+}
+
+message ListDueTimersRequest {
+  string project_id = 1;
+  int64 now_ns = 2;
+  int32 limit = 3;
+}
+
+message ListDueTimersResponse {
+  repeated Timer timers = 1;
+}
+
+// =============================================================================
+// Job Messages
+// =============================================================================
+
+message Job {
+  string job_id = 1;
+  string run_id = 2;
+  string project_id = 3;
+  string component_id = 4;
+  string component_name = 5;
+  bytes input_data = 6;
+  string status = 7;              // pending, claimed, started, completed, failed, cancelled
+  int32 priority = 8;
+  string claimed_by = 9;
+  string batch_id = 10;
+  int32 batch_index = 11;
+  int64 timeout_ms = 12;
+  int32 attempt = 13;
+  int32 max_attempts = 14;
+  string error_message = 15;
+  string trace_id = 16;
+  map<string, string> metadata = 17;
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp claimed_at = 19;
+  google.protobuf.Timestamp completed_at = 20;
+}
+
+message GetJobRequest {
+  string project_id = 1;
+  string job_id = 2;
+  string run_id = 3;
+}
+
+message GetJobResponse {
+  Job job = 1;
+  bool found = 2;
+}
+
+message ListJobsByRunRequest {
+  string project_id = 1;
+  string run_id = 2;
+}
+
+message ListJobsByRunResponse {
+  repeated Job jobs = 1;
+}
+
+message ListJobsByBatchRequest {
+  string project_id = 1;
+  string batch_id = 2;
+}
+
+message ListJobsByBatchResponse {
+  repeated Job jobs = 1;
+}
+
+// =============================================================================
+// Batch Messages
+// =============================================================================
+
+message Batch {
+  string batch_id = 1;
+  string project_id = 2;
+  string service_name = 3;
+  string component_type = 4;
+  string component_name = 5;
+  string status = 6;              // pending, queued, running, completed, partial_failure, failed, cancelled
+  int32 total_items = 7;
+  int32 completed_items = 8;
+  int32 failed_items = 9;
+  int32 cancelled_items = 10;
+  int32 max_concurrency = 11;
+  bool continue_on_failure = 12;
+  int64 batch_timeout_ms = 13;
+  int64 default_item_timeout_ms = 14;
+  string trace_id = 15;
+  bytes metadata = 16;
+  google.protobuf.Timestamp submitted_at = 17;
+  google.protobuf.Timestamp started_at = 18;
+  google.protobuf.Timestamp completed_at = 19;
+}
+
+message GetBatchRequest {
+  string project_id = 1;
+  string batch_id = 2;
+}
+
+message GetBatchResponse {
+  Batch batch = 1;
+  bool found = 2;
+}
+
+// =============================================================================
+// Session Messages
+// =============================================================================
+
+message Session {
+  string session_id = 1;
+  string project_id = 2;
+  string session_type = 3;       // agent, workflow
+  string component_name = 4;
+  string service_name = 5;
+  bytes state = 6;
+  bytes metadata = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  google.protobuf.Timestamp last_used_at = 10;
+  google.protobuf.Timestamp expires_at = 11;
+}
+
+message GetSessionRequest {
+  string project_id = 1;
+  string session_id = 2;
+}
+
+message GetSessionResponse {
+  Session session = 1;
+  bool found = 2;
+}
+
+message ListSessionsRequest {
+  string project_id = 1;
+  string component_name = 2;     // filter by component (empty = all)
+  string session_type = 3;       // filter by type (empty = all)
+}
+
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+// =============================================================================
+// Message Messages
+// =============================================================================
+
+message ChatMessage {
+  string message_id = 1;
+  string project_id = 2;
+  string message_type = 3;       // request, response, event
+  string message_key = 4;
+  string from_service = 5;
+  string to_service = 6;
+  string reply_to = 7;
+  bytes payload = 8;
+  string status = 9;             // pending, delivered, failed
+  int32 priority = 10;
+  bytes headers = 11;
+  string trace_id = 12;
+  string correlation_id = 13;
+  google.protobuf.Timestamp scheduled_at = 14;
+  google.protobuf.Timestamp delivered_at = 15;
+  google.protobuf.Timestamp created_at = 16;
+}
+
+message GetMessageRequest {
+  string project_id = 1;
+  string message_id = 2;
+  string run_id = 3;
+}
+
+message GetMessageResponse {
+  ChatMessage message = 1;
+  bool found = 2;
+}
+
+message ListMessagesByCorrelationRequest {
+  string project_id = 1;
+  string correlation_id = 2;
+}
+
+message ListMessagesByCorrelationResponse {
+  repeated ChatMessage messages = 1;
+}
+
+// =============================================================================
+// Run Listing (S3 Parquet + DuckDB)
+// =============================================================================
+
+message ListRunsRequest {
+  string project_id = 1;
+  optional string deployment_id = 2;
+  optional string status = 3;
+  optional string service_name = 4;
+  optional string component_name = 5;
+  optional string component_type = 6;
+  optional string session_id = 7;
+  optional string parent_run_id = 8;
+  optional int64 since_ms = 9;
+  optional int64 until_ms = 10;
+  int32 limit = 11;
+  // Deprecated: callers should drive pagination with `cursor`. Left in for
+  // back-compat during the migration window.
+  int32 offset = 12 [deprecated = true];
+  // Workspace UUID — required by the query layer to scope to the auth's
+  // workspace partition in S3 Parquet. Empty falls back to the legacy
+  // single-workspace path during transition.
+  string workspace_id = 13;
+  // Opaque cursor from a previous ListRunsResponse.next_cursor. Empty for
+  // the first page. Mutually exclusive with `offset` — when both are set,
+  // `cursor` wins.
+  string cursor = 14;
+  // Exact component names, matched as a union; intersects component_name and
+  // all other filters. Studio resolves a partial search into this set, so the
+  // archive keeps equality pruning on its component partition. Empty means no
+  // set constraint. Same bounds and alphabet as deployment_ids.
+  repeated string component_names = 15;
+  // Union within this set; intersects deployment_id and all other filters.
+  // Empty means no set constraint. At most 100 IDs / 8192 comma-separated
+  // bytes; IDs use ASCII letters, digits, hyphens and underscores (1..256).
+  // Field 18 retains compatibility with the deployment-filter PR stack;
+  // fields 16..17 carry the duration window below.
+  repeated string deployment_ids = 18;
+  // What started the run: Run.metadata["trigger_type"], such as "mcp" or
+  // "cron".
+  optional string trigger_type = 19;
+  // The hosted MCP server whose tool started the run:
+  // Run.metadata["mcp.server"].
+  optional string mcp_server = 20;
+  // Duration window in milliseconds: min is inclusive and max exclusive, so
+  // adjacent buckets (<100ms, 100ms-1s, 1s-10s, >10s) never overlap. Either
+  // bound may be set alone. Only finished runs (completed_at set) are
+  // eligible: a run still executing has no final duration, and its
+  // `duration_ms` of 0 would otherwise land it in the fastest bucket.
+  // Negative bounds, or min >= max, are rejected as invalid arguments.
+  optional int64 min_duration_ms = 16;
+  optional int64 max_duration_ms = 17;
+}
+
+message ListRunsResponse {
+  repeated Run items = 1;
+  // Deprecated: globally-correct distinct counts across hot RocksDB + cold S3
+  // are expensive at scale and were N×inflated in HA mode (gap F5). Counts
+  // come from the analytics store; the runs list returns `has_more` +
+  // `next_cursor` instead. Field 2 retained at -1 sentinel for clients that
+  // still read it during the migration window.
+  int64 total_count = 2 [deprecated = true];
+  int32 limit = 3;
+  int32 offset = 4;
+  // Deprecated: callers should drive pagination with `next_cursor` /
+  // `has_more`. `next_offset` is left populated for back-compat.
+  optional int32 next_offset = 5 [deprecated = true];
+  // True if a subsequent page is available — drive "Load more" UX.
+  bool has_more = 6;
+  // Opaque cursor for the next page; pass back via ListRunsRequest.cursor.
+  // Empty when `has_more` is false. Today encodes
+  // `(submitted_at_ms, run_id)` per Decision 15; treat as opaque.
+  string next_cursor = 7;
+  // Phase 3 task 3.8: replication lag at the receiving node when this
+  // response was assembled, in milliseconds. Computed as
+  // `now_ms - last_applied_record_ts_ms` for the local processor's
+  // last-applied record. Exposes the eventually-consistent contract
+  // honestly so clients (Studio) can render a staleness banner above
+  // some threshold (Decision 19/20). Zero when no records have been
+  // tailed yet or the signal is unavailable.
+  int64 replication_lag_ms = 8;
+}
+
+message ListEventsRequest {
+  string project_id = 1;
+  // Optional post-scan filters. `source` / `event_name` / `deployment_id`
+  // are applied after the index scan (the hot-index key is project + time
+  // only), so a strict filter scans more rows per page.
+  optional string source = 2;
+  optional string event_name = 3;
+  optional string deployment_id = 4;
+  optional int64 since_ms = 5;
+  optional int64 until_ms = 6;
+  int32 limit = 7;
+  // Opaque cursor from a previous ListEventsResponse.next_cursor. Empty
+  // for the first page. Encodes `(timestamp_ms, event_run_id)`.
+  string cursor = 8;
+}
+
+// Compact inbound-event summary for the Events list. The full event
+// (payload, matched triggers) is fetched on demand via ReadByRunId using
+// `event_run_id`.
+message EventSummary {
+  string event_run_id = 1;
+  string event_id = 2;
+  string event_name = 3;
+  string source = 4;
+  string deployment_id = 5;
+  int64 timestamp_ns = 6;
+  // Number of triggers this event matched → number of runs it enqueued.
+  uint32 matched_count = 7;
+  // Triggers skipped because they use features not yet supported (CEL
+  // filters, input mapping, batching, delays).
+  uint32 skipped_unsupported_count = 8;
+  // Lifecycle status for the received event. Initial values are
+  // "received" and "rejected".
+  string status = 9;
+  // Human-readable reason when status is "rejected".
+  string error_message = 10;
+  // Dispatch path used after the event was received: "trigger" or
+  // "binding".
+  string dispatch_kind = 11;
+  // Bound component target for chat/binding dispatches.
+  string bound_component_name = 12;
+  string bound_component_type = 13;
+}
+
+message ListEventsResponse {
+  repeated EventSummary items = 1;
+  int32 limit = 2;
+  bool has_more = 3;
+  // Opaque cursor for the next page; pass back via ListEventsRequest.cursor.
+  // Empty when `has_more` is false.
+  string next_cursor = 4;
+}
+
+message QueryRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+  string sql = 3;
+}
+
+message QueryColumn {
+  string name = 1;
+  string data_type = 2;
+}
+
+message QueryCoverage {
+  // Absent means coverage is unknown, not complete from the beginning.
+  optional int64 runs_complete_since_ms = 1;
+  optional int64 events_complete_since_ms = 2;
+}
+
+message QueryResponse {
+  repeated QueryColumn columns = 1;
+  // UTF-8 JSON array with explicit nulls. Bounded before crossing the RPC.
+  bytes rows_json = 2;
+  uint64 row_count = 3;
+  // Set only if every exposed table has a proven completeness boundary.
+  optional int64 complete_since_ms = 4;
+  QueryCoverage coverage = 5;
+  uint64 elapsed_ms = 6;
+  int64 replication_lag_ms = 7;
+}
+
+message GetRunStatsRequest {
+  string project_id = 1;
+  optional string deployment_id = 2;
+  optional int64 since_ms = 3;
+  optional int64 until_ms = 4;
+  // Workspace UUID — used to scope to the workspace partition prefix.
+  string workspace_id = 5;
+}
+
+message GetRunStatsResponse {
+  map<string, int64> count_by_status = 1;
+  map<string, int64> count_by_component_type = 2;
+  // Deprecated: was summed across distinct leader nodes in HA, producing
+  // up-to-N×inflated numbers (gap F5). Source counts from the analytics
+  // store; runtime returns only hot-tier in-flight tallies. Field 3
+  // retained at -1 sentinel for clients still reading it.
+  int64 total_count = 3 [deprecated = true];
+}
+
+// =============================================================================
+// Durable Execution Messages (Checkpoint + EventStream)
+// =============================================================================
+
+// CheckpointType represents the type of checkpoint event.
+enum CheckpointType {
+  CHECKPOINT_TYPE_UNSPECIFIED = 0;
+  CHECKPOINT_TYPE_STEP_STARTED = 1;
+  CHECKPOINT_TYPE_STEP_COMPLETED = 2;
+  CHECKPOINT_TYPE_STEP_FAILED = 3;
+  CHECKPOINT_TYPE_STATE_SNAPSHOT = 4;
+}
+
+// DurableStepCheckpoint represents a checkpoint for a workflow step with metrics.
+message DurableStepCheckpoint {
+  string run_id = 1;
+  string step_key = 2;
+  string step_name = 3;
+  string step_type = 4;            // "function", "activity", "child_workflow"
+  CheckpointType type = 5;
+  bytes payload = 6;               // Input for STARTED, output for COMPLETED
+  string error_message = 7;        // Only for FAILED
+  string error_type = 8;           // Error classification
+
+  // Metrics (populated on COMPLETED)
+  int64 tokens_in = 10;
+  int64 tokens_out = 11;
+  double cost_usd = 12;
+  int64 latency_ms = 13;
+  string model_provider = 14;
+  string model_version = 15;
+}
+
+// CheckpointRequest sent from SDK worker to engine.
+message CheckpointRequest {
+  DurableStepCheckpoint checkpoint = 1;
+  // Tenant the run belongs to. Required: the engine's journal + memoization
+  // lookups are keyed by (project_id, run_id).
+  string project_id = 2;
+}
+
+// CheckpointResponse from the engine.
+message CheckpointResponse {
+  bool success = 1;
+  string error_message = 2;
+
+  // For memoization: if step was already completed, return cached output.
+  bool memoized = 3;
+  bytes cached_output = 4;
+}
+
+// ActivationKind identifies the durable unit represented by an activation.
+enum ActivationKind {
+  ACTIVATION_KIND_UNSPECIFIED = 0;
+  ACTIVATION_KIND_STEP = 1;
+  ACTIVATION_KIND_FUNCTION = 2;
+  ACTIVATION_KIND_MODEL = 3;
+  ACTIVATION_KIND_TOOL = 4;
+  ACTIVATION_KIND_CHILD = 5;
+  ACTIVATION_KIND_APPROVAL = 6;
+  ACTIVATION_KIND_TIMER = 7;
+  ACTIVATION_KIND_EVAL = 8;
+  reserved 9 to 15;
+}
+
+// BeginActivationOutcome is the complete V1 begin decision surface.
+enum BeginActivationOutcome {
+  BEGIN_ACTIVATION_OUTCOME_UNSPECIFIED = 0;
+  BEGIN_ACTIVATION_OUTCOME_EXECUTE = 1;
+  BEGIN_ACTIVATION_OUTCOME_REPLAY = 2;
+  BEGIN_ACTIVATION_OUTCOME_WAIT = 3;
+  BEGIN_ACTIVATION_OUTCOME_CONFLICT = 4;
+  BEGIN_ACTIVATION_OUTCOME_CANCELLED = 5;
+  BEGIN_ACTIVATION_OUTCOME_UNKNOWN_OUTCOME = 6;
+}
+
+// ActivationRecoveryPolicy controls how interrupted or uncertain work settles.
+enum ActivationRecoveryPolicy {
+  ACTIVATION_RECOVERY_POLICY_UNSPECIFIED = 0;
+  ACTIVATION_RECOVERY_POLICY_IDEMPOTENT_RETRY = 1;
+  ACTIVATION_RECOVERY_POLICY_DURABLE_STEPS = 2;
+  ACTIVATION_RECOVERY_POLICY_UNKNOWN_OUTCOME = 3;
+  ACTIVATION_RECOVERY_POLICY_COMPENSATE = 4;
+  ACTIVATION_RECOVERY_POLICY_FAIL = 5;
+}
+
+// ChildJoinPolicy controls whether a child is part of the parent's terminal
+// obligation. Required children must settle before the parent can succeed;
+// detached children own an independent terminal obligation.
+enum ChildJoinPolicy {
+  CHILD_JOIN_POLICY_UNSPECIFIED = 0;
+  CHILD_JOIN_POLICY_REQUIRED = 1;
+  CHILD_JOIN_POLICY_DETACHED = 2;
+}
+
+// ActivationExternalOutcomeCertainty describes whether an external effect is known.
+enum ActivationExternalOutcomeCertainty {
+  ACTIVATION_EXTERNAL_OUTCOME_CERTAINTY_UNSPECIFIED = 0;
+  ACTIVATION_EXTERNAL_OUTCOME_CERTAINTY_NO_EFFECT = 1;
+  ACTIVATION_EXTERNAL_OUTCOME_CERTAINTY_EFFECT_COMMITTED = 2;
+  ACTIVATION_EXTERNAL_OUTCOME_CERTAINTY_UNKNOWN = 3;
+}
+
+// ActivationStatus is the durable aggregate status.
+enum ActivationStatus {
+  ACTIVATION_STATUS_UNSPECIFIED = 0;
+  ACTIVATION_STATUS_ACTIVE = 1;
+  ACTIVATION_STATUS_RETRY_READY = 2;
+  ACTIVATION_STATUS_COMPLETED = 3;
+  ACTIVATION_STATUS_FAILED = 4;
+  ACTIVATION_STATUS_SUSPENDED = 5;
+  ACTIVATION_STATUS_CANCELLED = 6;
+  ACTIVATION_STATUS_UNKNOWN_OUTCOME = 7;
+}
+
+// ActivationErrorCode is stable across runtime and SDK implementations.
+enum ActivationErrorCode {
+  ACTIVATION_ERROR_CODE_UNSPECIFIED = 0;
+  ACTIVATION_ERROR_CODE_NONDETERMINISTIC_REPLAY = 1;
+  ACTIVATION_ERROR_CODE_STALE_AUTHORITY = 2;
+  ACTIVATION_ERROR_CODE_UNKNOWN_WRITE_OUTCOME = 3;
+  ACTIVATION_ERROR_CODE_PAYLOAD_CONFLICT = 4;
+  ACTIVATION_ERROR_CODE_ILLEGAL_TRANSITION = 5;
+  ACTIVATION_ERROR_CODE_INVALID_ARGUMENT = 6;
+  ACTIVATION_ERROR_CODE_INLINE_PAYLOAD_TOO_LARGE = 7;
+  ACTIVATION_ERROR_CODE_REFERENCE_REQUIRED = 8;
+  ACTIVATION_ERROR_CODE_STATE_VERSION_CONFLICT = 9;
+  ACTIVATION_ERROR_CODE_REQUIRED_CHILD_UNRESOLVED = 10;
+}
+
+// ActivationErrorDetail is encoded in gRPC status details for failed writes.
+message ActivationErrorDetail {
+  ActivationErrorCode code = 1;
+  string activation_id = 2;
+  uint32 attempt = 3;
+  string message = 4;
+}
+
+// ImmutablePayloadReference addresses a project-scoped immutable value.
+message ImmutablePayloadReference {
+  string project_id = 1;
+  string kind = 2;
+  string uri = 3;
+  uint64 size_bytes = 4;
+  bytes sha256 = 5;
+  string content_type = 6;
+}
+
+// ActivationPayload contains either bounded inline bytes or an immutable reference.
+message ActivationPayload {
+  oneof value {
+    bytes inline_data = 1;
+    ImmutablePayloadReference reference = 2;
+  }
+}
+
+// ActivationStateMutation is committed as part of an accepted completion.
+message ActivationStateMutation {
+  string operation_id = 1;
+  string entity_type = 2;
+  string entity_key = 3;
+  string scope = 4;
+  string scope_id = 5;
+  bytes data = 6;
+  string data_type = 7;
+  int64 expected_version = 8;
+}
+
+// ActivationOutboxIntent is a durable effect intent accepted with a completion.
+message ActivationOutboxIntent {
+  string intent_id = 1;
+  string kind = 2;
+  string idempotency_key = 3;
+  ActivationPayload payload = 4;
+}
+
+// ActivationUsage contains bounded provider/runtime accounting.
+message ActivationUsage {
+  int64 tokens_in = 1;
+  int64 tokens_out = 2;
+  double cost_usd = 3;
+  int64 latency_ms = 4;
+  string provider = 5;
+  string model = 6;
+  int64 cached_tokens = 7;
+}
+
+// ActivationEvidence contains bounded diagnostic evidence for an accepted outcome.
+message ActivationEvidence {
+  string evidence_type = 1;
+  ActivationPayload payload = 2;
+  bytes sha256 = 3;
+}
+
+// ChildActivationLinkage is immutable spawn identity for a delegated child.
+// child_run_id and child_session_id are allocated before the spawn is
+// admitted, so replay and recovery reattach to the same logical child.
+message ChildActivationLinkage {
+  string child_key = 1;
+  string child_run_id = 2;
+  string child_session_id = 3;
+  bytes child_definition_digest = 4;
+  ChildJoinPolicy join_policy = 5;
+}
+
+// BeginActivationRequest identifies one logical activation independently of attempts.
+message BeginActivationRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string parent_activation_id = 3;
+  ActivationKind kind = 4;
+  string stable_key = 5;
+  bytes input_digest = 6;
+  bytes definition_digest = 7;
+  ActivationRecoveryPolicy recovery_policy = 8;
+  string worker_session_id = 9;
+  bytes run_authority = 10;
+  bytes lease_authority = 11;
+  ChildActivationLinkage child = 12;
+  // Human-readable name shown on the journal record (step name, tool name,
+  // model id). Not part of the activation identity.
+  string display_name = 13;
+  // Optional plaintext JSON input rendered on the journal record. Never
+  // feeds input_digest; bounded to 64 KiB.
+  bytes input_data = 14;
+  // Optional reader-only parent correlation ID for the execution tree, bounded
+  // to 256 bytes. Empty means absent. Never changes durable activation ownership
+  // or logical identity; parent_activation_id remains authoritative.
+  string display_parent_correlation_id = 15;
+}
+
+// ActivationConflictReceipt describes deterministic-key reuse with new semantics.
+message ActivationConflictReceipt {
+  ActivationErrorCode error_code = 1;
+  bytes expected_input_digest = 2;
+  bytes provided_input_digest = 3;
+  bytes expected_definition_digest = 4;
+  bytes provided_definition_digest = 5;
+  string message = 6;
+}
+
+// ActivationWaitReceipt identifies the active attempt a caller must not duplicate.
+message ActivationWaitReceipt {
+  uint32 attempt = 1;
+  string active_worker_session_id = 2;
+  uint64 accepted_journal_offset = 3;
+}
+
+// ActivationUnknownOutcomeReceipt explains why the runtime refuses to retry.
+message ActivationUnknownOutcomeReceipt {
+  string error_code = 1;
+  ActivationPayload error_data = 2;
+  uint64 accepted_journal_offset = 3;
+}
+
+// BeginActivationResponse carries the complete journal-authoritative decision.
+message BeginActivationResponse {
+  BeginActivationOutcome outcome = 1;
+  string activation_id = 2;
+  uint32 attempt = 3;
+  bytes fence_token = 4;
+  uint64 accepted_journal_offset = 5;
+  ActivationPayload replay_result = 6;
+  ActivationConflictReceipt conflict = 7;
+  ActivationWaitReceipt wait = 8;
+  ActivationUnknownOutcomeReceipt unknown_outcome = 9;
+}
+
+// CompleteActivationRequest commits one fenced logical completion.
+message CompleteActivationRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string activation_id = 3;
+  uint32 attempt = 4;
+  bytes fence_token = 5;
+  ActivationPayload output = 6;
+  bytes output_digest = 7;
+  repeated ActivationStateMutation state_mutations = 8;
+  repeated ActivationOutboxIntent outbox_intents = 9;
+  ActivationUsage usage = 10;
+  repeated ActivationEvidence evidence = 11;
+}
+
+// CompleteActivationResponse acknowledges the canonical completion offset.
+message CompleteActivationResponse {
+  bool accepted = 1;
+  bool replayed = 2;
+  string activation_id = 3;
+  uint32 attempt = 4;
+  uint64 accepted_journal_offset = 5;
+}
+
+// FailActivationRequest records one fenced failure or uncertain external outcome.
+message FailActivationRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string activation_id = 3;
+  uint32 attempt = 4;
+  bytes fence_token = 5;
+  string error_code = 6;
+  ActivationPayload error_data = 7;
+  bool retryable = 8;
+  ActivationExternalOutcomeCertainty external_outcome_certainty = 9;
+  repeated ActivationEvidence evidence = 10;
+  // Wall-clock duration of the failed attempt as measured by the worker.
+  int64 latency_ms = 11;
+}
+
+// FailActivationResponse acknowledges the canonical failure decision.
+message FailActivationResponse {
+  bool accepted = 1;
+  bool replayed = 2;
+  string activation_id = 3;
+  uint32 attempt = 4;
+  ActivationStatus status = 5;
+  uint64 accepted_journal_offset = 6;
+}
+
+// SuspendActivationRequest parks one active activation until a durable timer
+// generation becomes due. The input and definition digests bind the request to
+// the logical activation that BeginActivation admitted.
+message SuspendActivationRequest {
+  string project_id = 1;
+  string run_id = 2;
+  string activation_id = 3;
+  uint32 attempt = 4;
+  bytes fence_token = 5;
+  string timer_key = 6;
+  int64 ready_at_ms = 7;
+  bytes input_digest = 8;
+  bytes definition_digest = 9;
+  bytes continuation = 10;
+  int64 delay_ms = 11; // Requested duration; runtime derives ready_at_ms
+}
+
+// SuspendActivationResponse acknowledges the canonical suspension offset and
+// the runtime-derived timer generation.
+message SuspendActivationResponse {
+  bool accepted = 1;
+  bool replayed = 2;
+  string activation_id = 3;
+  uint32 attempt = 4;
+  uint64 accepted_journal_offset = 5;
+  string timer_id = 6;
+}
+
+// EventStreamMessage carries a single ephemeral event from worker to engine.
+// Used for SSE-only events (tokens, progress, logs, spans) that need real-time
+// delivery but not journal persistence.
+message EventStreamMessage {
+  string run_id = 1;              // Run this event belongs to
+  string event_type = 2;          // e.g., "output.delta", "lm.message.delta", "log.info"
+  bytes data = 3;                 // JSON event payload
+  string trace_id = 4;            // Trace context for correlation
+  string span_id = 5;             // Span context for correlation
+  string project_id = 6;           // Tenant context (for multi-tenant deployments)
+  int64 source_timestamp_ns = 7;  // Nanosecond timestamp when event was created at source
+  string worker_id = 8;           // Worker ID for stream ownership validation
+}
+
+// EventStreamAck is returned when the EventStream closes (client half-close or disconnect).
+// Provides summary statistics for the stream lifetime.
+message EventStreamAck {
+  bool success = 1;               // Whether the stream completed without errors
+  int64 events_received = 2;      // Total events received on this stream
+}
+
+// =============================================================================
+// Pull-Based Job Queue Messages
+// =============================================================================
+
+// PollJobsRequest is sent by workers to pull jobs from the durable queue.
+message PollJobsRequest {
+  // Worker ID (must be registered via WorkerStream on the coordinator).
+  string worker_id = 1;
+
+  // Component UUIDs or names this worker handles.
+  repeated string component_ids = 2;
+
+  // Maximum number of jobs to claim in this poll.
+  int32 max_jobs = 3;
+
+  // Tenant ID for multi-tenant isolation.
+  string project_id = 4;
+
+  // Optional deployment ID filter.
+  optional string deployment_id = 5;
+
+  // How long the claim is valid (ms). Default: 300000 (5 min).
+  int64 claim_timeout_ms = 6;
+}
+
+// PollJobsResponse contains jobs claimed by the worker.
+message PollJobsResponse {
+  repeated JobAssignment jobs = 1;
+}
+
+message WorkerSlotPolicy {
+  uint32 min_slots = 1;
+  uint32 max_slots = 2;
+  double target_cpu_usage = 3;
+  double target_memory_usage = 4;
+  int64 ramp_throttle_ms = 5;
+}
+
+message RegisterWorkerSessionRequest {
+  string worker_id = 1;
+  string project_id = 2;
+  string deployment_id = 3;
+  uint32 max_slots = 4;
+  WorkerSlotPolicy slot_policy = 5;
+  repeated WorkerCapability capabilities = 6;
+  repeated ComponentInfo components = 7;
+  string service_name = 8;
+  string service_version = 9;
+  string service_type = 10;
+  // Typed runtime protocol capabilities. These are separate from routable
+  // WorkerCapability entries, which describe user and built-in components.
+  repeated string supported_protocol_capabilities = 11;
+  repeated string required_protocol_capabilities = 12;
+}
+
+message RegisterWorkerSessionResponse {
+  string worker_session_id = 1;
+  int64 expires_at_ms = 2;
+  WorkerSlotPolicy effective_slot_policy = 3;
+  repeated string supported_protocol_capabilities = 4;
+  repeated string required_protocol_capabilities = 5;
+}
+
+message PollJobRequest {
+  string worker_id = 1;
+  string worker_session_id = 2;
+  int64 wait_ms = 3;           // clamped to 30s
+  int64 claim_timeout_ms = 4;  // lease duration
+}
+
+enum SlotScalingDecision {
+  SLOT_SCALING_DECISION_UNSPECIFIED = 0;
+  SLOT_SCALING_DECISION_HOLD = 1;
+  SLOT_SCALING_DECISION_SCALE_UP = 2;
+  SLOT_SCALING_DECISION_SCALE_DOWN = 3;
+}
+
+message SlotScalingHint {
+  SlotScalingDecision decision = 1;
+  uint32 suggested_delta = 2;
+}
+
+message PollJobResponse {
+  JobAssignment job = 1;       // absent means timeout
+  // Present only when server_slot_scaling_v1 was negotiated. Older workers
+  // ignore this additive field and retain their local slot policy.
+  SlotScalingHint slot_scaling = 2;
+}
+
+// JobAssignment represents a single job assigned to a worker.
+message JobAssignment {
+  string job_id = 1;
+  string run_id = 2;
+  string component_id = 3;
+  ComponentType component_type = 4;   // Denormalized for worker routing
+  string component_name = 5;          // Denormalized for worker routing
+  bytes input_data = 6;
+  map<string, string> metadata = 7;
+  int32 attempt = 8;
+  int64 timeout_ms = 9;
+  string trace_id = 10;
+  string lease_id = 11;
+  int64 lease_expires_at_ms = 12;
+}
+
+// LeaseRenewalOutcome distinguishes a committed renewal from a definite loss
+// of execution authority. Transport/status failures remain indeterminate and
+// must be retried only while the caller's current lease is still valid.
+enum LeaseRenewalOutcome {
+  LEASE_RENEWAL_OUTCOME_UNSPECIFIED = 0;
+  LEASE_RENEWAL_OUTCOME_RENEWED = 1;
+  LEASE_RENEWAL_OUTCOME_AUTHORITY_LOST = 2;
+  LEASE_RENEWAL_OUTCOME_TERMINAL = 3;
+  LEASE_RENEWAL_OUTCOME_SESSION_INACTIVE = 4;
+}
+
+message RenewJobLeaseRequest {
+  string worker_id = 1;
+  string worker_session_id = 2;
+  string run_id = 3;
+  string lease_id = 4;
+  int64 lease_timeout_ms = 5;
+
+  // Additive authority fields used by push workers. Legacy pull workers omit
+  // them and continue to be fenced by worker_session_id.
+  optional uint32 attempt = 6;
+  WorkerMode mode = 7;
+  string project_id = 8;
+  string deployment_id = 9;
+}
+
+message RenewJobLeaseResponse {
+  bool renewed = 1;
+  int64 lease_expires_at_ms = 2;
+  LeaseRenewalOutcome outcome = 3;
+}
+
+message ReportWorkerCapacityRequest {
+  string worker_id = 1;
+  string worker_session_id = 2;
+  uint32 open_poll_slots = 3;
+  uint32 active_slots = 4;
+  uint32 desired_slots = 5;
+  uint32 effective_max_slots = 6;
+  double cpu_usage = 7;
+  double memory_usage = 8;
+  int64 observed_at_ms = 9;
+}
+
+message ReportWorkerCapacityResponse {
+  bool accepted = 1;
+  int64 recorded_at_ms = 2;
+}
+
+// CompleteJobRequest reports the result of a polled job.
+message CompleteJobRequest {
+  string job_id = 1;
+  string worker_id = 2;
+  bool success = 3;
+  bytes output_data = 4;
+  string error_message = 5;
+  string error_code = 6;
+  map<string, string> metadata = 7;
+  string project_id = 8;
+  string lease_id = 9;
+  string worker_session_id = 10;
+  // Exact zero-based attempt returned by PollJob. Presence is required for
+  // lease-fenced completion; optional preserves wire compatibility while
+  // allowing the runtime to distinguish attempt 0 from an old client.
+  optional uint32 attempt = 11;
+  // Lifecycle records the worker deferred while `pull_completion_lifecycle_v1`
+  // was negotiated: run.started, <component>.started, handler journal events,
+  // and <component>.completed|failed, in emission order. The runtime appends
+  // them in one atomic batch at offsets below the fenced completion request,
+  // then appends the request. Records must belong to this project and run and
+  // must not be terminal, another `run.*` lifecycle event, runtime-internal,
+  // an activation record, or `workflow.state.changed`. Ignored when this
+  // lease's completion is already projected. Max 32 records / 256 KiB.
+  repeated Record lifecycle_records = 12;
+}
+
+// CompleteJobResponse acknowledges the job completion.
+message CompleteJobResponse {
+  bool acknowledged = 1;
+  // Lifecycle records newly written by this call. A retried CompleteJob
+  // resolves duplicates to their earlier offsets and does not count them.
+  uint32 lifecycle_written_count = 2;
+}
