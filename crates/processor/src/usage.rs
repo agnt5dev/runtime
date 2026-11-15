@@ -5,7 +5,7 @@
 //! the journal. The hosted runtime sends those to the control plane for
 //! billing and analytics, and prices model calls from a pricing table it
 //! fetches. Both sit behind these two traits so the processor itself carries
-//! no HTTP client and knows no control plane. The OSS runtime passes neither,
+//! no HTTP client and knows no control plane. The single-process runtime passes neither,
 //! and nothing is reported or priced.
 
 use async_trait::async_trait;

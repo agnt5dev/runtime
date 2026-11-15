@@ -2,7 +2,7 @@
 //!
 //! `MemorySegment` keeps the journal in process memory. Tests across the
 //! runtime use it in place of durable storage, and it carries no storage
-//! engine of its own, so both the OSS and hosted runtimes can depend on it.
+//! engine of its own, so both the single-process and hosted runtimes can depend on it.
 
 #![forbid(unsafe_code)]
 

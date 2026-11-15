@@ -5,7 +5,7 @@ version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 license = "Apache-2.0"
-description = "PostgreSQL storage adapter for the AGNT5 OSS runtime profile"
+description = "PostgreSQL storage adapter for the AGNT5 runtime"
 
 [dependencies]
 engine-core = { workspace = true }

@@ -3,7 +3,7 @@
 //! A resume used to be accepted whenever a run was paused, whatever it was
 //! waiting for. An answer sent during a durable sleep was kept, and the next
 //! wait-for-user took it without asking anyone, so one "approve" granted
-//! approvals nobody saw. Both the managed gateway and the OSS
+//! approvals nobody saw. Both the managed gateway and the single-process
 //! server check a resume with [`check_resume_target`] before writing
 //! `run.resumed`.
 
@@ -16,7 +16,7 @@ use crate::types::Record;
 /// review. Only these take an answer.
 pub const ANSWERABLE_PAUSE_REASONS: &[&str] = &["user_input_required", "guardrail_human_review"];
 
-/// Prefix of the resume source the OSS server's `/suspend` gives a manual
+/// Prefix of the resume source the server's `/suspend` gives a manual
 /// suspension. Such a pause is resumed without an answer.
 pub const MANUAL_SUSPEND_SOURCE_PREFIX: &str = "manual-suspend:";
 
@@ -330,7 +330,7 @@ mod tests {
         assert!(check_resume_target(&review, &json!({"user_response": "approve"})).is_ok());
     }
 
-    // The OSS server's manual suspension resumes without an answer; an answer
+    // The server's manual suspension resumes without an answer; an answer
     // sent to it would be kept for a question nobody has been asked.
     #[test]
     fn manual_suspension_resumes_without_an_answer() {

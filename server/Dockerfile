@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # The agnt5-runtime image. Build from the repository root:
-#   docker build -f oss-server/Dockerfile .
+#   docker build -f server/Dockerfile .
 
 FROM rust:1-bookworm AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends cmake clang \

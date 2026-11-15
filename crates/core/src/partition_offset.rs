@@ -1,7 +1,7 @@
 //! Stable encoding for partition-aware public journal offsets.
 //!
 //! The encoding belongs to the shared runtime contract rather than any
-//! physical segment adapter. Managed routing and the PostgreSQL OSS profile
+//! physical segment adapter. Managed routing and the PostgreSQL profile
 //! therefore interpret offsets identically without depending on RocksDB.
 
 use crate::error::{EngineError, EngineResult};

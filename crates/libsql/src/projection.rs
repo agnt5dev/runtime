@@ -831,7 +831,7 @@ impl ProjectionCommitter for LibsqlStorage {
                 | ProjectionMutation::DeleteRunQueryArchiveIntent { .. }
                 | ProjectionMutation::PutRunQueryArchiveReceipt { .. } => {
                     return Err(EngineError::InvalidArgument(
-                        "libSQL OSS profile does not support managed archive mutations".to_string(),
+                        "libSQL profile does not support managed archive mutations".to_string(),
                     ));
                 }
             }

@@ -65,7 +65,7 @@ enum WriterAuthority {
     PostgresLock(Arc<PostgresWriterLock>),
 }
 
-trait OssStorage:
+trait RuntimeStorage:
     EngineServiceStore
     + ProjectionCommitter
     + ProjectionStateReader
@@ -79,7 +79,7 @@ trait OssStorage:
 {
 }
 
-impl<T> OssStorage for T where
+impl<T> RuntimeStorage for T where
     T: EngineServiceStore
         + ProjectionCommitter
         + ProjectionStateReader
@@ -242,7 +242,7 @@ async fn run_runtime<S, J>(
     writer_authority: Option<WriterAuthority>,
 ) -> Result<()>
 where
-    S: OssStorage,
+    S: RuntimeStorage,
     J: Segment + 'static,
 {
     let initial_tail = journal
@@ -304,7 +304,7 @@ where
         .context("build gRPC reflection service")?;
     let grpc_service = EngineServiceServer::from_arc(service);
     let execution_service =
-        ExecutionEngineServiceServer::new(execution_service::OssExecutionService::new(
+        ExecutionEngineServiceServer::new(execution_service::LegacyExecutionService::new(
             backend,
             config.project_id.clone(),
             config.deployment_id.clone(),
@@ -320,7 +320,7 @@ where
         deployment_id = %config.deployment_id,
         storage_backend = health.backend(),
         startup_tail = initial_tail.0,
-        "AGNT5 OSS runtime starting"
+        "AGNT5 runtime starting"
     );
 
     let mut tasks = JoinSet::<Result<&'static str>>::new();
@@ -446,7 +446,7 @@ where
     // bounded, so a lost writer authority cannot keep this process serving.
     let drain_bound = exit_reason.is_some().then_some(FAILURE_DRAIN_TIMEOUT);
     drain_tasks(&mut tasks, drain_bound).await;
-    info!("AGNT5 OSS runtime stopped");
+    info!("AGNT5 runtime stopped");
     match exit_reason {
         Some(error) => Err(error),
         None => Ok(()),
@@ -509,7 +509,7 @@ async fn run_processor<S, J>(
     cancel: CancellationToken,
 ) -> Result<&'static str>
 where
-    S: OssStorage,
+    S: RuntimeStorage,
     J: Segment + 'static,
 {
     health.set_processor_alive(true);
@@ -585,12 +585,8 @@ async fn shutdown_signal() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    /// The OSS runtime publishes its proto descriptors through gRPC
-    /// reflection, and it builds from the public protos alone. This checks
-    /// that the hosted cluster protocols are compiled in exactly when
-    /// `engine-proto/managed` is on. A workspace-wide build turns that feature
-    /// on; the OSS-only build in Runtime CI, which also checks with
-    /// `cargo tree` that the feature stays off, is where they must be absent.
+    /// The runtime publishes its proto descriptors through gRPC reflection.
+    /// This checks that only the public worker contract is compiled in.
     #[test]
     fn hosted_protos_are_compiled_only_with_the_managed_feature() {
         let descriptors = engine_proto::FILE_DESCRIPTOR_SET;

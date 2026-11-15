@@ -1020,7 +1020,7 @@ impl<S: Segment> EngineServiceImpl<S> {
             .insert(RUN_META_LEASE_ATTEMPT.to_string(), job.attempt.to_string());
     }
 
-    /// Shared parking implementation for managed demand dispatch and the OSS
+    /// Shared parking implementation for managed demand dispatch and the single-process
     /// compatibility path. One attempt guard spans every waiter registration
     /// and fallback probe made by this public request.
     pub(super) async fn park_verified_poll(

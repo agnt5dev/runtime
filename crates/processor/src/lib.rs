@@ -1183,7 +1183,7 @@ async fn finish_partition_processor_attempt(
 /// Run the shared processor against a single partition without managed
 /// routing, RocksDB, S3, replication, or control-plane composition.
 ///
-/// The PostgreSQL OSS profile uses partition zero initially. Its journal
+/// The PostgreSQL profile uses partition zero initially. Its journal
 /// offsets are already local, which is byte-for-byte equivalent to the public
 /// encoded form for partition zero.
 #[allow(clippy::too_many_arguments)]

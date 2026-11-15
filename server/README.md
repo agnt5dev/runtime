@@ -1,4 +1,4 @@
-# AGNT5 OSS runtime
+# AGNT5 runtime
 
 `agnt5-runtime` is the single-process SQL profile of the shared AGNT5
 runtime. It supports PostgreSQL, a local SQLite file, and hosted Turso over
@@ -205,7 +205,7 @@ Bearer tokens use HS256, require a future `exp`, honor `nbf`, and must carry a
 ## Pull workers
 
 Run current Python, TypeScript, or Go SDK workers in pull mode against the gRPC
-listener. Set both endpoints to the same OSS gRPC address so worker polling,
+listener. Set both endpoints to the same gRPC address so worker polling,
 boundary events, and checkpoints use the same runtime:
 
 ```bash

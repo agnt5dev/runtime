@@ -38,13 +38,13 @@ pub async fn run<J, S>(
         max_attempts,
         interval_seconds = SWEEP_INTERVAL.as_secs(),
         batch_limit = SWEEP_LIMIT,
-        "OSS lease expiry sweeper started"
+        "lease expiry sweeper started"
     );
     let mut cursor = None;
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
-                info!("OSS lease expiry sweeper stopped");
+                info!("lease expiry sweeper stopped");
                 return;
             }
             _ = tokio::time::sleep(SWEEP_INTERVAL) => {
@@ -56,11 +56,11 @@ pub async fn run<J, S>(
                             quarantined = stats.quarantined,
                             skipped = stats.skipped,
                             fence_lost = stats.fence_lost,
-                            "OSS lease expiry sweep complete"
+                            "lease expiry sweep complete"
                         );
                     }
-                    Ok(_) => debug!("OSS lease expiry sweep found no due leases"),
-                    Err(error) => warn!(%error, "OSS lease expiry sweep failed; retrying"),
+                    Ok(_) => debug!("lease expiry sweep found no due leases"),
+                    Err(error) => warn!(%error, "lease expiry sweep failed; retrying"),
                 }
             }
         }

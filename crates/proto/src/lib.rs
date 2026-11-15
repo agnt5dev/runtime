@@ -17,10 +17,8 @@ pub mod triggers;
 /// Encoded descriptors for gRPC reflection in runtime profiles.
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("engine_descriptor");
 
-/// Whether this build compiled the hosted cluster protocols, through the
-/// `managed` feature. A workspace-wide build turns the feature on for every
-/// crate that shares this one, so a check of the OSS-only contract has to know
-/// which build it is running in.
+/// Whether this build compiled the hosted cluster protocols. They are not
+/// part of this repository, so this is always false.
 pub const HOSTED_PROTOS: bool = false;
 
 // Re-export at crate root for convenience.

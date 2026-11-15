@@ -25,13 +25,13 @@ use tonic::{Request, Response, Status, Streaming};
 /// through the in-process engine counts as runtime-authored, so accepting
 /// writes here would let any caller skip the checks that keep workers from
 /// writing records only the runtime may write.
-pub struct OssExecutionService {
+pub struct LegacyExecutionService {
     engine: Arc<dyn EngineBackend>,
     project_id: Arc<str>,
     deployment_id: Arc<str>,
 }
 
-impl OssExecutionService {
+impl LegacyExecutionService {
     pub fn new(
         engine: Arc<dyn EngineBackend>,
         project_id: impl Into<String>,
@@ -101,7 +101,7 @@ fn transient_record(
 }
 
 #[tonic::async_trait]
-impl ExecutionEngineService for OssExecutionService {
+impl ExecutionEngineService for LegacyExecutionService {
     async fn enqueue_component(
         &self,
         _request: Request<ExecuteComponentRequest>,
@@ -206,7 +206,7 @@ impl ExecutionEngineService for OssExecutionService {
 
 fn unsupported(method: &str) -> Status {
     Status::unimplemented(format!(
-        "{method} is outside the minimal OSS execution profile; use the HTTP API"
+        "{method} is outside the minimal execution profile; use the HTTP API"
     ))
 }
 
@@ -217,7 +217,7 @@ fn dataplane_status(error: impl std::fmt::Display) -> Status {
 /// Writes must go through `EngineService`, which checks the worker's lease.
 fn legacy_write_refused(method: &str) -> Status {
     Status::unimplemented(format!(
-        "{method} is not accepted by the OSS runtime; current SDKs write through EngineService"
+        "{method} is not accepted by the single-process runtime; current SDKs write through EngineService"
     ))
 }
 

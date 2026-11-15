@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! SQLite and Turso storage profile for the single-active OSS runtime.
+//! SQLite and Turso storage profile for the single-active runtime.
 //!
 //! The adapter uses the same backend-neutral journal and projection contracts
 //! as the managed and PostgreSQL profiles. Local files and remote Turso

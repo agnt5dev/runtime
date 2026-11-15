@@ -990,7 +990,7 @@ pub struct EngineServiceImpl<S: Segment> {
     /// unrelated saves. Hold through append and write-through so same-entity
     /// compare-and-set writers cannot race on this Engine instance.
     entity_state_write_locks: [tokio::sync::Mutex<()>; 1024],
-    /// Optional single-project/deployment boundary used by the OSS profile.
+    /// Optional single-project/deployment boundary used by the single-process profile.
     ///
     /// Managed composition leaves this unset and applies tenant policy at its
     /// authenticated gateway. The standalone binary binds gRPC directly, so
@@ -1076,7 +1076,7 @@ impl<S: Segment> EngineServiceImpl<S> {
         self
     }
 
-    /// Restrict direct EngineService mutations to one OSS execution scope.
+    /// Restrict direct EngineService mutations to one execution scope.
     pub fn with_execution_scope(
         mut self,
         project_id: impl Into<String>,

@@ -29,13 +29,13 @@ AGNT5_DATABASE_BACKEND=sqlite ./target/release/agnt5-runtime
 ```
 
 Configuration, the HTTP API, and how to point SDK workers at the runtime are in
-[`oss-server/README.md`](oss-server/README.md).
+[`server/README.md`](server/README.md).
 
 ## What is here
 
 | Path | What it is |
 | --- | --- |
-| `oss-server/` | The `agnt5-runtime` binary: configuration, HTTP API, startup and shutdown |
+| `server/` | The `agnt5-runtime` binary: configuration, HTTP API, startup and shutdown |
 | `crates/service/` | The engine service workers talk to: polling, leases, journal writes |
 | `crates/processor/` | Projects the journal into run state, timers and dispatch |
 | `crates/core/` | Shared types, the journal contract, and the storage traits |

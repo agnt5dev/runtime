@@ -109,7 +109,7 @@ pub(super) struct WorkerSession {
     pub(super) issued_at_ms: i64,
     pub(super) expires_at_ms: i64,
     /// Component inventory captured at registration. This is authoritative in
-    /// the single-process OSS profile; managed cross-node adoption can recover
+    /// the single-process profile; managed cross-node adoption can recover
     /// it from the gossip route when a signed session token lands elsewhere.
     pub(super) route_components: Vec<engine_proto::ComponentRouteSpec>,
     pub(super) slot_policy: WorkerSlotPolicy,
