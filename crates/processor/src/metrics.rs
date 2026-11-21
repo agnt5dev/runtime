@@ -471,6 +471,72 @@ pub fn record_terminal_supervisor_action(partition_id: u32, outcome: &str, resul
     );
 }
 
+/// The instance obligations on a partition, seen by one supervisor pass.
+pub fn record_instance_obligations(partition_id: u32, count: usize) {
+    processor_metrics().instance_obligations.record(
+        count as u64,
+        &[KeyValue::new("partition_id", partition_id as i64)],
+    );
+}
+
+/// One decision the instance supervisor took. `kind` is start, resume or
+/// hold; `result` is appended, deduplicated, waiting or error.
+pub fn record_instance_decision(
+    partition_id: u32,
+    kind: &'static str,
+    result: &'static str,
+    delay_ms: Option<i64>,
+) {
+    let metrics = processor_metrics();
+    metrics.instance_decisions.add(
+        1,
+        &[
+            KeyValue::new("partition_id", partition_id as i64),
+            KeyValue::new("kind", kind),
+            KeyValue::new("result", result),
+        ],
+    );
+    if let Some(delay_ms) = delay_ms {
+        metrics
+            .instance_decision_delay_ms
+            .record(delay_ms.max(0) as f64, &[KeyValue::new("kind", kind)]);
+    }
+}
+
+/// A start or resume checked as it was applied.
+pub fn record_instance_decision_applied(
+    partition_id: u32,
+    kind: &'static str,
+    outcome: &'static str,
+) {
+    processor_metrics().instance_decisions_applied.add(
+        1,
+        &[
+            KeyValue::new("partition_id", partition_id as i64),
+            KeyValue::new("kind", kind),
+            KeyValue::new("outcome", outcome),
+        ],
+    );
+}
+
+/// A journal record the instance projection refused to fold.
+pub fn record_instance_change_refused(partition_id: u32, change: &'static str) {
+    processor_metrics().instance_changes_refused.add(
+        1,
+        &[
+            KeyValue::new("partition_id", partition_id as i64),
+            KeyValue::new("change", change),
+        ],
+    );
+}
+
+/// Appends the instance guard refused since the last report.
+pub fn record_instance_guard_refusals(count: u64) {
+    if count > 0 {
+        processor_metrics().instance_guard_refusals.add(count, &[]);
+    }
+}
+
 /// Record a durable activation transition only after its projection commit
 /// succeeds. The transition label is a closed set from the V1 contract.
 pub fn record_activation_journal_event(record: &Record, partition_id: u32) {
@@ -528,15 +594,21 @@ pub fn record_billing_count_lag(partition_id: u32, lag_seconds: f64) {
     );
 }
 
-pub fn record_timer_backlog(due: u64, oldest_overdue_age_ms: u64, batch_saturated: bool) {
+pub fn record_timer_backlog(
+    partition_id: u32,
+    due: u64,
+    oldest_overdue_age_ms: u64,
+    batch_saturated: bool,
+) {
     let metrics = processor_metrics();
-    metrics.timer_due.record(due, &[]);
+    let labels = [KeyValue::new("partition_id", partition_id as i64)];
+    metrics.timer_due.record(due, &labels);
     metrics
         .timer_oldest_overdue_age_ms
-        .record(oldest_overdue_age_ms, &[]);
+        .record(oldest_overdue_age_ms, &labels);
     metrics
         .timer_batch_saturated
-        .record(u64::from(batch_saturated), &[]);
+        .record(u64::from(batch_saturated), &labels);
 }
 
 /// The transition label comes from the record envelope, gated on the
@@ -1129,6 +1201,49 @@ pub fn processor_metrics() -> &'static ProcessorMetrics {
                     "Recovery actions appended by the partition-owned terminal supervisor.",
                 )
                 .build(),
+            instance_obligations: meter
+                .u64_gauge("agnt5.runtime.instance.obligations")
+                .with_description(
+                    "Agent instances on the partition waiting for their leader to decide a start, \
+                     resume or hold, as of the instance supervisor's last pass.",
+                )
+                .build(),
+            instance_decisions: meter
+                .u64_counter("agnt5.runtime.instance.decisions")
+                .with_description(
+                    "Decisions the instance supervisor appended (start, resume, hold), by result.",
+                )
+                .build(),
+            instance_decision_delay_ms: meter
+                .f64_histogram("agnt5.runtime.instance.decision_delay_ms")
+                .with_description(
+                    "From the record that made an agent instance need a decision to the \
+                     supervisor's append of it: the start delay of an instance's next run.",
+                )
+                .with_unit("ms")
+                .with_boundaries(engine_proto::buckets::slow_latency_ms())
+                .build(),
+            instance_decisions_applied: meter
+                .u64_counter("agnt5.runtime.instance.decisions_applied")
+                .with_description(
+                    "Instance starts and resumes checked as they were applied, by outcome: \
+                     accepted, rejected, stale or invalid.",
+                )
+                .build(),
+            instance_changes_refused: meter
+                .u64_counter("agnt5.runtime.instance.changes_refused")
+                .with_description(
+                    "Journal records the instance projection refused to fold, such as an item for \
+                     a full inbox. The record stays in the journal and changes nothing.",
+                )
+                .build(),
+            instance_guard_refusals: meter
+                .u64_counter("agnt5.runtime.instance.guard_refusals")
+                .with_description(
+                    "Appends refused because they would start, resume or hold an instance's run \
+                     without its leader's decision.",
+                )
+                .build(),
             activation_journal_events: meter
                 .u64_counter("agnt5.runtime.activation.journal_events")
                 .with_description(
@@ -1620,6 +1735,12 @@ pub struct ProcessorMetrics {
     pub terminal_obligations_observed: Counter<u64>,
     pub terminal_obligation_age_ms: Histogram<f64>,
     pub terminal_supervisor_actions: Counter<u64>,
+    pub instance_obligations: Gauge<u64>,
+    pub instance_decisions: Counter<u64>,
+    pub instance_decision_delay_ms: Histogram<f64>,
+    pub instance_decisions_applied: Counter<u64>,
+    pub instance_changes_refused: Counter<u64>,
+    pub instance_guard_refusals: Counter<u64>,
     pub activation_journal_events: Counter<u64>,
     pub billing_unmetered_steps: Counter<u64>,
     pub billing_requests: Counter<u64>,

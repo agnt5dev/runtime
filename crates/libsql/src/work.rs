@@ -759,3 +759,7 @@ fn decode_run_id_pairs(
         })
         .collect()
 }
+
+/// The open-source runtime keeps no always-on agent instances; the
+/// supervisor's reads refuse.
+impl engine_core::storage_contract::InstanceSupervisorStore for LibsqlStorage {}

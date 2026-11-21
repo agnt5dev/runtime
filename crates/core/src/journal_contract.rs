@@ -40,6 +40,18 @@ const ACTIVATION_SUSPENSION_IDEMPOTENCY_PREFIX: &[u8] = b"idempotency/activation
 const ACTIVATION_DECISION_IDEMPOTENCY_PREFIX: &[u8] = b"idempotency/activation.decision/v1\0";
 const PULL_LIFECYCLE_IDEMPOTENCY_PREFIX: &[u8] = b"idempotency/pull.completion_lifecycle/v1\0";
 const OBSERVED_SPAN_IDEMPOTENCY_PREFIX: &[u8] = b"idempotency/observed.span/v1\0";
+/// One slot per `(project, inbox, source)`, so a source that delivers the same
+/// item again (a webhook retry, a client resend) adds one item.
+const INBOX_ITEM_IDEMPOTENCY_PREFIX: &[u8] = b"idempotency/inbox.item/v1\0";
+const INSTANCE_MESSAGE_IDEMPOTENCY_PREFIX: &[u8] = b"idempotency/instance.message/v1\0";
+/// One slot per `(project, run, resume source)`, so an answer delivered twice
+/// asks for one resume, as `run.resumed` does today.
+const INSTANCE_RESUME_REQUEST_IDEMPOTENCY_PREFIX: &[u8] =
+    b"idempotency/instance.resume_requested/v1\0";
+/// One slot per `(project, run, request, rejected count)` for the leader's
+/// resume, so a repeated decision collides and a decision retried after a
+/// rejection doesn't.
+const INSTANCE_RESUME_IDEMPOTENCY_PREFIX: &[u8] = b"idempotency/instance.resume/v1\0";
 const ACTIVATION_STATE_VERSION_PREFIX: &[u8] = b"state-version/activation/v1\0";
 const IDEMPOTENCY_VALIDATION_PREFIX: &[u8] = b"idempotency-validation/v1\0";
 const META_ENTITY_STATE_OPERATION_ID: &str = "operation_id";
@@ -48,6 +60,9 @@ const META_TERMINAL_OUTCOME: &str = "terminal_outcome";
 /// Optional stable caller operation for retryable runtime-authored cancellation.
 pub const META_CANCEL_OPERATION_ID: &str = "cancel_operation_id";
 pub const META_INVOCATION_IDEMPOTENCY_KEY: &str = "invocation_idempotency_key";
+/// The source id of an `inbox.item`, such as an event id or the caller's
+/// idempotency key. It names the item's idempotency slot.
+pub const META_INBOX_SOURCE_ID: &str = "inbox_source_id";
 /// Runtime-stamped marker on a lifecycle record the worker delivered inside
 /// `CompleteJob`. With `lease_id` and `lease_attempt` it gives the record an
 /// idempotency slot so a retried completion resolves to the earlier offsets.
@@ -415,6 +430,10 @@ pub fn validate_append_records(records: &[Record]) -> EngineResult<()> {
                 record.event_type
             )));
         }
+        if record.event_type == crate::instance::INBOX_ITEM_EVENT {
+            validate_inbox_item(record)?;
+        }
+        guard_instance_run(record)?;
         if matches!(record.event_type.as_str(), "run.queued" | "batch.created") {
             if invocation_idempotency_key(record).is_some() {
                 invocation_validation_fingerprint(record)?;
@@ -624,6 +643,59 @@ pub fn record_idempotency_key(record: &Record) -> Option<Vec<u8>> {
     let prefix = idempotency_prefix(record)?;
     if let Some(caller_key) = invocation_idempotency_key(record) {
         return Some(invocation_index_key(&record.project_id, caller_key));
+    }
+    if let Some((request_offset, rejected)) = instance_resume_identity(record) {
+        let mut key = prefix.to_vec();
+        for value in [
+            record.project_id.as_bytes(),
+            record.run_id.as_bytes(),
+            request_offset.as_bytes(),
+            rejected.as_bytes(),
+        ] {
+            key.extend_from_slice(&(value.len() as u64).to_be_bytes());
+            key.extend_from_slice(value);
+        }
+        return Some(key);
+    }
+    if record.event_type == crate::instance::INSTANCE_RESUME_REQUESTED_EVENT {
+        let mut key = prefix.to_vec();
+        for value in [
+            record.project_id.as_bytes(),
+            record.run_id.as_bytes(),
+            record
+                .metadata
+                .get(META_RESUME_SOURCE_ID)
+                .map(String::as_bytes)
+                .unwrap_or_default(),
+        ] {
+            key.extend_from_slice(&(value.len() as u64).to_be_bytes());
+            key.extend_from_slice(value);
+        }
+        return Some(key);
+    }
+    if let Some(message_id) = instance_message_id(record) {
+        let mut key = prefix.to_vec();
+        for value in [
+            record.project_id.as_bytes(),
+            record.run_id.as_bytes(),
+            message_id.as_bytes(),
+        ] {
+            key.extend_from_slice(&(value.len() as u64).to_be_bytes());
+            key.extend_from_slice(value);
+        }
+        return Some(key);
+    }
+    if let Some(source_id) = inbox_item_source_id(record) {
+        let mut key = prefix.to_vec();
+        for value in [
+            record.project_id.as_bytes(),
+            record.run_id.as_bytes(),
+            source_id.as_bytes(),
+        ] {
+            key.extend_from_slice(&(value.len() as u64).to_be_bytes());
+            key.extend_from_slice(value);
+        }
+        return Some(key);
     }
     if let Some((lease_id, lease_attempt, index)) = pull_completion_lifecycle_identity(record) {
         let correlation_id = record.correlation_id.as_deref().unwrap_or_default();
@@ -846,7 +918,22 @@ pub fn record_idempotency_validation_fingerprint(record: &Record) -> Option<[u8;
         && record.metadata.contains_key(META_CANCEL_OPERATION_ID);
     let strict_assignment = is_strict_lease_assignment(record);
     let strict_lease_fence = has_lease_fence_slot(record);
+    // A source reusing its id with different content is a conflict, not a
+    // retry. The payload is deterministic for a true retry: the item id is
+    // derived, and the content is the caller's.
+    let strict_inbox_item =
+        inbox_item_source_id(record).is_some() || instance_message_id(record).is_some();
+    // Two attempts at the same instance start share a run id. One that names
+    // different items is a conflicting decision, not a retry: the journal keeps
+    // the first, and the second is refused (ADR-027).
+    let strict_instance_start = record.event_type == "run.queued"
+        && record
+            .metadata
+            .get(crate::instance::META_INSTANCE_DECISION)
+            .is_some_and(|value| value == crate::instance::INSTANCE_DECISION_START);
     if !strict_activation
+        && !strict_inbox_item
+        && !strict_instance_start
         && !strict_timer
         && !strict_assignment
         && !strict_lease_fence
@@ -878,10 +965,16 @@ pub fn record_idempotency_validation_fingerprint(record: &Record) -> Option<[u8;
         }
         return Some(hasher.finalize().into());
     }
-    if !matches!(
-        record.event_type.as_str(),
-        "timer.fired" | "timer.canceled" | "timer.expired"
-    ) {
+    // A follow-up's timer is first-writer-wins on its id: a retried request
+    // works its due time out again, and the first one stands.
+    let followup_schedule = record.event_type == "timer.scheduled"
+        && record.metadata.contains_key(META_FOLLOWUP_REQUESTED_BY);
+    if !followup_schedule
+        && !matches!(
+            record.event_type.as_str(),
+            "timer.fired" | "timer.canceled" | "timer.expired"
+        )
+    {
         hasher.update((record.data.len() as u64).to_be_bytes());
         hasher.update(record.data.as_ref());
     }
@@ -920,10 +1013,25 @@ pub fn validate_idempotency_validation_fingerprint(
         return Ok(());
     }
 
-    if invocation_idempotency_key(incoming).is_some() {
+    // An item reusing its source id with a different message is the caller's
+    // conflict, like a reused invocation key: it travels as one, so every
+    // gateway answers 409.
+    if invocation_idempotency_key(incoming).is_some()
+        || incoming.event_type == crate::instance::INBOX_ITEM_EVENT
+    {
         return Err(EngineError::InvocationConflict {
             run_id: incoming.run_id.clone(),
         });
+    }
+    if incoming
+        .metadata
+        .get(crate::instance::META_INSTANCE_DECISION)
+        .is_some_and(|decision| decision == crate::instance::INSTANCE_DECISION_START)
+    {
+        return Err(EngineError::InvalidArgument(format!(
+            "instance start for run {} conflicts with the start already decided for its sequence",
+            incoming.run_id
+        )));
     }
 
     if let Some((activation_id, attempt, _)) = activation_record_identity(incoming) {
@@ -964,6 +1072,194 @@ pub fn validate_idempotency_validation_fingerprint(
         "{} conflicts with the accepted timer generation decision",
         incoming.event_type
     )))
+}
+
+/// Only an instance's leader starts or resumes the instance's runs. Every path
+/// that queues or resumes a run appends through here, so a path that missed
+/// the inbox fails loudly instead of quietly starting a second run.
+///
+/// An instance-owned run is recognised from its id alone. Its `run.queued`
+/// must carry the supervisor's start marker, or be a retry of the same run
+/// (a later attempt, which the orchestrator writes without the marker). A
+/// resume must carry the supervisor's resume marker. This guards against a
+/// missed code path, not a hostile writer: the marker is ordinary metadata.
+/// Appends the instance guard refused, since the processor last took the
+/// count for its metrics. The guard runs in every journal adapter, so it
+/// counts here rather than depend on a metrics library.
+static INSTANCE_GUARD_REFUSALS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Take the count of guard refusals since the last call.
+pub fn take_instance_guard_refusals() -> u64 {
+    INSTANCE_GUARD_REFUSALS.swap(0, std::sync::atomic::Ordering::Relaxed)
+}
+
+fn guard_instance_run(record: &Record) -> EngineResult<()> {
+    let refused = guard_instance_run_inner(record);
+    if refused.is_err() {
+        INSTANCE_GUARD_REFUSALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+    refused
+}
+
+fn guard_instance_run_inner(record: &Record) -> EngineResult<()> {
+    guard_instance_hold(record)?;
+    if !matches!(record.event_type.as_str(), "run.queued" | "run.resumed")
+        || !crate::instance_placement::is_instance_run_id(&record.run_id)
+    {
+        return Ok(());
+    }
+    let decision = record
+        .metadata
+        .get(crate::instance::META_INSTANCE_DECISION)
+        .map(String::as_str);
+    let allowed = match record.event_type.as_str() {
+        "run.queued" => {
+            let retry = record
+                .metadata
+                .get(META_RETRY_SOURCE)
+                .is_some_and(|source| !source.is_empty())
+                && record
+                    .metadata
+                    .get("attempt")
+                    .and_then(|attempt| attempt.parse::<u32>().ok())
+                    .is_some_and(|attempt| attempt > 0);
+            match decision {
+                Some(decision) => decision == crate::instance::INSTANCE_DECISION_START,
+                None => retry,
+            }
+        }
+        _ => decision == Some(crate::instance::INSTANCE_DECISION_RESUME),
+    };
+    if allowed {
+        Ok(())
+    } else {
+        Err(EngineError::InvalidArgument(format!(
+            "{} for run {} refused: only the agent instance's leader starts or resumes its runs",
+            record.event_type, record.run_id
+        )))
+    }
+}
+
+/// A hold is the leader's: a `run.paused` marked as a hold must be fenced as
+/// an operator stop, which only the runtime can author, and an operator stop
+/// must be marked as a hold, of an instance-owned run. A worker's own pause
+/// carries neither. Other records copied from a held run's metadata, such as a
+/// cancellation's, may carry the marker and mean nothing by it.
+fn guard_instance_hold(record: &Record) -> EngineResult<()> {
+    let marked = record.event_type == "run.paused"
+        && record
+            .metadata
+            .get(crate::instance::META_INSTANCE_DECISION)
+            .is_some_and(|decision| decision == crate::instance::INSTANCE_DECISION_HOLD);
+    let operator_stop = record
+        .metadata
+        .get(crate::lease_fence::META_FENCE_REASON)
+        .is_some_and(|reason| {
+            reason == crate::lease_fence::LeaseExpiryReason::OperatorStop.as_str()
+        });
+    if !marked && !operator_stop {
+        return Ok(());
+    }
+    let fenced_stop = operator_stop
+        && record
+            .metadata
+            .get(crate::lease_fence::META_FENCE_KIND)
+            .map(String::as_str)
+            == Some(crate::lease_fence::LeaseFenceKind::LeaseExpiry.as_str());
+    if marked
+        && fenced_stop
+        && record.event_type == "run.paused"
+        && crate::instance_placement::is_instance_run_id(&record.run_id)
+    {
+        return Ok(());
+    }
+    Err(EngineError::InvalidArgument(format!(
+        "{} for run {} refused: only an agent instance's leader holds its run for a stop",
+        record.event_type, record.run_id
+    )))
+}
+
+/// Metadata on a follow-up's `timer.scheduled`: the instance run that asked
+/// for it.
+pub const META_FOLLOWUP_REQUESTED_BY: &str = "followup_requested_by";
+
+/// Set by the orchestrator on a `run.queued` that retries a failed attempt.
+const META_RETRY_SOURCE: &str = "retry_source";
+
+/// An inbox item must agree with the inbox it is appended to: the run id is a
+/// canonical inbox id, and the payload names the same project, inbox key,
+/// generation and source, with the item id derived from the inbox and source.
+/// So the idempotency slot, the instance the item is folded into and the id
+/// the caller was given can never disagree.
+fn validate_inbox_item(record: &Record) -> EngineResult<()> {
+    let invalid = |message: &str| {
+        EngineError::InvalidArgument(format!("invalid {}: {message}", record.event_type))
+    };
+    let source_id = inbox_item_source_id(record)
+        .ok_or_else(|| invalid(&format!("metadata[{META_INBOX_SOURCE_ID}] is required")))?;
+    let identity = crate::instance_placement::parse_inbox_run_id(&record.run_id)
+        .ok_or_else(|| invalid("run_id is not a canonical inbox id"))?;
+    if identity.project_id() != record.project_id {
+        return Err(invalid("run_id names another project"));
+    }
+    let item: crate::instance::InboxItem = serde_json::from_slice(record.data.as_ref())
+        .map_err(|error| invalid(&format!("payload: {error}")))?;
+    item.validate()
+        .map_err(|error| invalid(&error.to_string()))?;
+    if item.source_id != source_id
+        || item.inbox_key != identity.inbox_key()
+        || item.generation != identity.generation()
+        || item.item_id != crate::instance_placement::inbox_item_id(&record.run_id, source_id)
+    {
+        return Err(invalid("payload does not match its inbox and source"));
+    }
+    Ok(())
+}
+
+/// The leader's resume of an instance run: the request it applies and the
+/// rejected count it was decided under.
+fn instance_resume_identity(record: &Record) -> Option<(&str, &str)> {
+    if record.event_type != "run.resumed"
+        || record
+            .metadata
+            .get(crate::instance::META_INSTANCE_DECISION)
+            .map(String::as_str)
+            != Some(crate::instance::INSTANCE_DECISION_RESUME)
+    {
+        return None;
+    }
+    Some((
+        record
+            .metadata
+            .get(crate::instance::META_INSTANCE_RESUME_REQUEST_OFFSET)?
+            .as_str(),
+        record
+            .metadata
+            .get(crate::instance::META_INSTANCE_REJECTED_DECISIONS)?
+            .as_str(),
+    ))
+}
+
+/// An instance's message, by its id: one per sending call, however often it
+/// is appended.
+fn instance_message_id(record: &Record) -> Option<&str> {
+    (record.event_type == crate::instance::INSTANCE_MESSAGE_EVENT)
+        .then(|| {
+            record
+                .metadata
+                .get(crate::instance::META_INSTANCE_MESSAGE_ID)
+        })
+        .flatten()
+        .map(String::as_str)
+        .filter(|value| !value.is_empty())
+}
+
+fn inbox_item_source_id(record: &Record) -> Option<&str> {
+    (record.event_type == crate::instance::INBOX_ITEM_EVENT)
+        .then(|| record.metadata.get(META_INBOX_SOURCE_ID))
+        .flatten()
+        .map(String::as_str)
+        .filter(|value| !value.is_empty())
 }
 
 fn invocation_idempotency_key(record: &Record) -> Option<&str> {
@@ -1084,6 +1380,23 @@ fn idempotency_prefix(record: &Record) -> Option<&'static [u8]> {
     }
     if observed_span_identity(record).is_some() {
         return Some(OBSERVED_SPAN_IDEMPOTENCY_PREFIX);
+    }
+    if inbox_item_source_id(record).is_some() {
+        return Some(INBOX_ITEM_IDEMPOTENCY_PREFIX);
+    }
+    if instance_message_id(record).is_some() {
+        return Some(INSTANCE_MESSAGE_IDEMPOTENCY_PREFIX);
+    }
+    if instance_resume_identity(record).is_some() {
+        return Some(INSTANCE_RESUME_IDEMPOTENCY_PREFIX);
+    }
+    if record.event_type == crate::instance::INSTANCE_RESUME_REQUESTED_EVENT
+        && record
+            .metadata
+            .get(META_RESUME_SOURCE_ID)
+            .is_some_and(|value| !value.is_empty())
+    {
+        return Some(INSTANCE_RESUME_REQUEST_IDEMPOTENCY_PREFIX);
     }
     match record.event_type.as_str() {
         "run.queued" | "batch.created" => Some(RUN_QUEUED_IDEMPOTENCY_PREFIX),
@@ -1208,6 +1521,259 @@ mod tests {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([digest_byte; 32]),
         );
         record
+    }
+
+    fn inbox_item_record(source_id: &str, content: &str) -> Record {
+        use crate::instance_placement::{inbox_item_id, inbox_run_id, InstanceIdentity};
+        let identity = InstanceIdentity::new("project-1", "env-1", "support", "u_123", 1).unwrap();
+        let run_id = inbox_run_id(&identity, 0, 1).unwrap();
+        let data = serde_json::json!({
+            "item_id": inbox_item_id(&run_id, source_id),
+            "source_id": source_id,
+            "inbox_key": "u_123",
+            "generation": 1,
+            "conversation_id": "api",
+            "channel": "api",
+            "create_if_absent": true,
+            "content": content,
+        });
+        let mut record = state_record("inbox-item");
+        record.event_type = crate::instance::INBOX_ITEM_EVENT.to_string();
+        record.run_id = run_id;
+        record.data = Bytes::from(serde_json::to_vec(&data).unwrap());
+        record.metadata = HashMap::from([(
+            super::META_INBOX_SOURCE_ID.to_string(),
+            source_id.to_string(),
+        )]);
+        record
+    }
+
+    #[test]
+    fn inbox_items_take_one_slot_per_source() {
+        let first = inbox_item_record("evt_1", "refund 4412");
+        validate_append_records(std::slice::from_ref(&first)).unwrap();
+        let key = record_idempotency_key(&first).expect("inbox items are idempotent");
+        assert!(key.starts_with(b"idempotency/inbox.item/v1\0"));
+
+        // A retry of the same delivery lands in the same slot with the same
+        // fingerprint; another source gets its own slot.
+        let retry = inbox_item_record("evt_1", "refund 4412");
+        assert_eq!(record_idempotency_key(&retry), Some(key.clone()));
+        assert_eq!(
+            record_idempotency_validation_fingerprint(&retry),
+            record_idempotency_validation_fingerprint(&first)
+        );
+        assert_ne!(
+            record_idempotency_key(&inbox_item_record("evt_2", "refund 4412")),
+            Some(key.clone())
+        );
+
+        // The same source with different content is a conflict, not a retry,
+        // and it is the caller's conflict, so it travels as one (409).
+        let reused = inbox_item_record("evt_1", "refund 9999");
+        assert_eq!(record_idempotency_key(&reused), Some(key));
+        assert_ne!(
+            record_idempotency_validation_fingerprint(&reused),
+            record_idempotency_validation_fingerprint(&first)
+        );
+        let accepted = record_idempotency_validation_fingerprint(&first).unwrap();
+        assert!(matches!(
+            super::validate_idempotency_validation_fingerprint(Some(&accepted), &reused),
+            Err(crate::error::EngineError::InvocationConflict { .. })
+        ));
+        assert!(
+            super::validate_idempotency_validation_fingerprint(Some(&accepted), &retry).is_ok()
+        );
+    }
+
+    #[test]
+    fn inbox_items_must_agree_with_their_inbox() {
+        let refused = |record: Record| {
+            assert!(
+                validate_append_records(&[record]).is_err(),
+                "an inconsistent inbox item was accepted"
+            );
+        };
+
+        let mut no_source = inbox_item_record("evt_1", "x");
+        no_source.metadata.clear();
+        refused(no_source);
+
+        let mut other_source = inbox_item_record("evt_1", "x");
+        other_source
+            .metadata
+            .insert(super::META_INBOX_SOURCE_ID.to_string(), "evt_2".to_string());
+        refused(other_source);
+
+        let mut not_an_inbox = inbox_item_record("evt_1", "x");
+        not_an_inbox.run_id = "run-1".to_string();
+        refused(not_an_inbox);
+
+        let mut other_project = inbox_item_record("evt_1", "x");
+        other_project.project_id = "project-2".to_string();
+        refused(other_project);
+
+        for (field, value) in [
+            (
+                "item_id",
+                serde_json::json!(uuid::Uuid::new_v4().to_string()),
+            ),
+            ("inbox_key", serde_json::json!("u_999")),
+            ("generation", serde_json::json!(2)),
+        ] {
+            let mut record = inbox_item_record("evt_1", "x");
+            let mut data: serde_json::Value = serde_json::from_slice(&record.data).unwrap();
+            data[field] = value;
+            record.data = Bytes::from(serde_json::to_vec(&data).unwrap());
+            refused(record);
+        }
+
+        let mut not_json = inbox_item_record("evt_1", "x");
+        not_json.data = Bytes::from_static(b"not json");
+        refused(not_json);
+    }
+
+    fn instance_run_record(event_type: &str, metadata: &[(&str, &str)]) -> Record {
+        use crate::instance_placement::{instance_run_id, InstanceIdentity};
+        let identity = InstanceIdentity::new("project-1", "env-1", "support", "u_123", 1).unwrap();
+        let mut record = state_record("instance-run");
+        record.event_type = event_type.to_string();
+        record.run_id = instance_run_id(&identity, 0, 0, 1).unwrap();
+        record.metadata = metadata
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+        record
+    }
+
+    #[test]
+    fn only_the_leader_starts_or_resumes_an_instance_run() {
+        let ok = |record: Record| validate_append_records(&[record]).is_ok();
+        // The supervisor's start, and a retry of the same run.
+        assert!(ok(instance_run_record(
+            "run.queued",
+            &[("instance_decision", "start")]
+        )));
+        assert!(ok(instance_run_record(
+            "run.queued",
+            &[("retry_source", "run.failed"), ("attempt", "1")]
+        )));
+        // Anything else that would start or resume it is refused.
+        assert!(!ok(instance_run_record("run.queued", &[])));
+        assert!(!ok(instance_run_record("run.queued", &[("attempt", "1")])));
+        assert!(!ok(instance_run_record(
+            "run.queued",
+            &[("retry_source", "run.failed"), ("attempt", "0")]
+        )));
+        assert!(!ok(instance_run_record(
+            "run.queued",
+            &[("instance_decision", "resume")]
+        )));
+        assert!(!ok(instance_run_record("run.resumed", &[])));
+        assert!(!ok(instance_run_record(
+            "run.resumed",
+            &[("instance_decision", "start")]
+        )));
+        assert!(ok(instance_run_record(
+            "run.resumed",
+            &[("instance_decision", "resume")]
+        )));
+        // Other records of an instance run, and runs that aren't an
+        // instance's, are untouched.
+        assert!(ok(instance_run_record("run.completed", &[])));
+        let mut plain = instance_run_record("run.queued", &[]);
+        plain.run_id = "0190d4a8-0000-7000-8000-000000000001".into();
+        assert!(ok(plain));
+        // A re-cased id is still an instance's.
+        let mut recased = instance_run_record("run.queued", &[]);
+        recased.run_id = recased.run_id.to_uppercase();
+        assert!(!ok(recased));
+    }
+
+    #[test]
+    fn a_followup_timer_keeps_its_first_due_time() {
+        let mut first = timer_record("timer.scheduled", "followup-r-k", 10);
+        first.data = bytes::Bytes::from_static(br#"{"fire_at_ns":100}"#);
+        first.metadata.insert(
+            super::META_FOLLOWUP_REQUESTED_BY.to_string(),
+            "r".to_string(),
+        );
+        let mut retry = first.clone();
+        retry.data = bytes::Bytes::from_static(br#"{"fire_at_ns":105}"#);
+        assert_eq!(
+            record_idempotency_validation_fingerprint(&first),
+            record_idempotency_validation_fingerprint(&retry)
+        );
+        // Other timer schedules stay strict on their payload.
+        let mut plain = first.clone();
+        plain.metadata.remove(super::META_FOLLOWUP_REQUESTED_BY);
+        let mut plain_retry = retry.clone();
+        plain_retry
+            .metadata
+            .remove(super::META_FOLLOWUP_REQUESTED_BY);
+        assert_ne!(
+            record_idempotency_validation_fingerprint(&plain),
+            record_idempotency_validation_fingerprint(&plain_retry)
+        );
+    }
+
+    #[test]
+    fn the_guard_counts_what_it_refuses() {
+        super::take_instance_guard_refusals();
+        assert!(validate_append_records(&[instance_run_record("run.queued", &[])]).is_err());
+        assert!(super::take_instance_guard_refusals() >= 1);
+    }
+
+    #[test]
+    fn only_the_leader_holds_an_instance_run_for_a_stop() {
+        let ok = |record: Record| validate_append_records(&[record]).is_ok();
+        let stop_fence = [
+            ("agnt5_fence_kind", "lease_expiry"),
+            ("agnt5_fence_lease_id", "lease-1"),
+            ("agnt5_fence_worker_id", "worker-1"),
+            ("agnt5_fence_attempt", "0"),
+            ("agnt5_fence_reason", "operator_stop"),
+        ];
+        fn hold(
+            fence: &[(&'static str, &'static str)],
+            extra: &[(&'static str, &'static str)],
+        ) -> Vec<(&'static str, &'static str)> {
+            let mut metadata = fence.to_vec();
+            metadata.extend_from_slice(extra);
+            metadata
+        }
+        // The leader's hold: a pause fenced as an operator stop, marked.
+        assert!(ok(instance_run_record(
+            "run.paused",
+            &hold(&stop_fence, &[("instance_decision", "hold")])
+        )));
+        // An operator stop without the mark, or on anything but a pause.
+        assert!(!ok(instance_run_record(
+            "run.paused",
+            &hold(&stop_fence, &[])
+        )));
+        assert!(!ok(instance_run_record(
+            "run.lease_expired",
+            &hold(&stop_fence, &[("instance_decision", "hold")])
+        )));
+        // A mark without the fence: what a worker could send.
+        assert!(!ok(instance_run_record(
+            "run.paused",
+            &[("instance_decision", "hold")]
+        )));
+        // A hold of a run that isn't an instance's.
+        let mut plain = instance_run_record(
+            "run.paused",
+            &hold(&stop_fence, &[("instance_decision", "hold")]),
+        );
+        plain.run_id = "0190d4a8-0000-7000-8000-000000000001".into();
+        assert!(!ok(plain));
+        // A worker's own pause, and a cancellation copied from a held run.
+        assert!(ok(instance_run_record("run.paused", &[])));
+        assert!(ok(instance_run_record(
+            "run.cancelled",
+            &[("instance_decision", "hold")]
+        )));
     }
 
     fn resume_with_continuation(continuation_len: usize) -> (Record, String) {

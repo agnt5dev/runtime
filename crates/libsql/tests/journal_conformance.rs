@@ -209,6 +209,20 @@ async fn sqlite_required_storage_port_contract() {
     .await;
 }
 
+// The open-source runtime keeps no always-on agent instances.
+#[tokio::test]
+async fn sqlite_refuses_agent_instances() {
+    let (_directory, root) = test_storage("instances").await;
+    let storage = Arc::new(
+        root.with_namespace(format!("test-{}", Uuid::new_v4()))
+            .expect("isolated test storage"),
+    );
+    let committer: Arc<dyn ProjectionCommitter> = storage.clone();
+    let ports =
+        engine_storage_conformance::RequiredStoragePorts::from_shared(storage.clone(), committer);
+    engine_storage_conformance::assert_agent_instances_unsupported(&ports, storage.as_ref()).await;
+}
+
 #[tokio::test]
 async fn writer_lease_enforces_one_active_runtime_per_namespace() {
     let (_directory, storage) = test_storage("writer-lease").await;

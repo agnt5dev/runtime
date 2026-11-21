@@ -169,6 +169,45 @@ pub enum ProjectionMutation {
     },
     /// Remove the terminal obligation after a run becomes terminal or suspended.
     DeleteTerminalObligation { partition_id: u32 },
+    /// Upsert an always-on agent instance's record.
+    PutInstance {
+        key: crate::instance::InstanceKey,
+        data: Vec<u8>,
+    },
+    /// Mark that the instance's leader must decide what it does next: it is
+    /// idle, not stopped, and has items waiting. Kept apart from terminal
+    /// obligations so the supervisor reads only instances.
+    PutInstanceObligation {
+        partition_id: u32,
+        key: crate::instance::InstanceKey,
+        data: Vec<u8>,
+    },
+    /// Clear the instance's obligation once nothing is left to decide.
+    DeleteInstanceObligation {
+        partition_id: u32,
+        key: crate::instance::InstanceKey,
+    },
+    /// Keep a waiting item's content beside its instance's record, so a long
+    /// idle instance wakes without reading trimmed journal from object storage.
+    PutInboxItemContent {
+        key: crate::instance::InstanceKey,
+        item_id: String,
+        data: Vec<u8>,
+    },
+    /// Drop an item's stored content once a run has taken it; the run's own
+    /// input carries it from then on.
+    DeleteInboxItemContent {
+        key: crate::instance::InstanceKey,
+        item_id: String,
+    },
+    /// Keep a request to resume the instance's active run until its leader
+    /// applies it.
+    PutInstanceResumeRequest {
+        key: crate::instance::InstanceKey,
+        data: Vec<u8>,
+    },
+    /// Drop the resume request once applied, or once its run has ended.
+    DeleteInstanceResumeRequest { key: crate::instance::InstanceKey },
     /// Upsert one step memoization value.
     PutStepMemo { step_key: String, data: Vec<u8> },
     /// Upsert one derived activation snapshot. Journal records remain authoritative.
@@ -740,6 +779,114 @@ impl<T: MaterializedStore + ?Sized> DispatchOutboxStore for T {
     }
 }
 
+/// The reads the instance supervisor makes on its partition. Stores without
+/// instances keep the refusing defaults.
+#[async_trait]
+pub trait InstanceSupervisorStore: Send + Sync {
+    /// Whether this store keeps instances at all. The supervisor doesn't run
+    /// where it doesn't.
+    fn supports_instances(&self) -> bool {
+        false
+    }
+
+    async fn scan_instance_obligations(
+        &self,
+        _partition_id: u32,
+        _limit: usize,
+        _start_after: Option<&crate::instance::InstanceKey>,
+    ) -> EngineResult<Vec<(crate::instance::InstanceKey, Vec<u8>)>> {
+        Err(crate::error::EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+
+    async fn load_instance(
+        &self,
+        _key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(crate::error::EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+
+    async fn load_inbox_item(
+        &self,
+        _key: &crate::instance::InstanceKey,
+        _item_id: &str,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(crate::error::EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+
+    async fn load_resume_request(
+        &self,
+        _key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(crate::error::EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+
+    /// The instance's active run as projected, which a stop's hold is fenced
+    /// against.
+    async fn load_instance_run(
+        &self,
+        _project_id: &str,
+        _run_id: &str,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(crate::error::EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+}
+
+#[async_trait]
+impl<T: MaterializedStore + ?Sized> InstanceSupervisorStore for T {
+    fn supports_instances(&self) -> bool {
+        true
+    }
+
+    async fn scan_instance_obligations(
+        &self,
+        partition_id: u32,
+        limit: usize,
+        start_after: Option<&crate::instance::InstanceKey>,
+    ) -> EngineResult<Vec<(crate::instance::InstanceKey, Vec<u8>)>> {
+        MaterializedStore::list_instance_obligations(self, partition_id, limit, start_after).await
+    }
+
+    async fn load_instance(
+        &self,
+        key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        MaterializedStore::get_instance(self, key).await
+    }
+
+    async fn load_inbox_item(
+        &self,
+        key: &crate::instance::InstanceKey,
+        item_id: &str,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        MaterializedStore::get_inbox_item_content(self, key, item_id).await
+    }
+
+    async fn load_resume_request(
+        &self,
+        key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        MaterializedStore::get_instance_resume_request(self, key).await
+    }
+
+    async fn load_instance_run(
+        &self,
+        project_id: &str,
+        run_id: &str,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        MaterializedStore::get_run(self, project_id, run_id).await
+    }
+}
+
 /// Consumer-owned port for partition-scoped terminal-obligation recovery.
 #[async_trait]
 pub trait TerminalObligationStore: Send + Sync {
@@ -854,13 +1001,36 @@ impl<T: MaterializedStore + ?Sized> ArchiveOutboxStore for T {
 /// Consumer-owned port for timer scheduling scans.
 #[async_trait]
 pub trait TimerWorkStore: Send + Sync {
+    /// Every partition's due timers, oldest first.
     async fn scan_due_timers(&self, now_ns: i64, limit: usize) -> EngineResult<Vec<Vec<u8>>>;
+
+    /// One partition's due timers, oldest first, so its leader fires only its
+    /// own and another partition's backlog can't crowd them out. `None` when
+    /// the store keeps no per-partition index: single-partition stores, whose
+    /// global scan is that partition's.
+    async fn scan_due_timers_for_partition(
+        &self,
+        _partition_id: u32,
+        _now_ns: i64,
+        _limit: usize,
+    ) -> EngineResult<Option<Vec<Vec<u8>>>> {
+        Ok(None)
+    }
 }
 
 #[async_trait]
 impl<T: MaterializedStore + ?Sized> TimerWorkStore for T {
     async fn scan_due_timers(&self, now_ns: i64, limit: usize) -> EngineResult<Vec<Vec<u8>>> {
         MaterializedStore::list_due_timers(self, now_ns, limit).await
+    }
+
+    async fn scan_due_timers_for_partition(
+        &self,
+        partition_id: u32,
+        now_ns: i64,
+        limit: usize,
+    ) -> EngineResult<Option<Vec<Vec<u8>>>> {
+        MaterializedStore::list_due_timers_for_partition(self, partition_id, now_ns, limit).await
     }
 }
 
@@ -1384,6 +1554,16 @@ pub trait ProjectionStateReader: Send + Sync {
         project_id: &str,
         message_id: &str,
     ) -> EngineResult<Option<Vec<u8>>>;
+
+    /// Stores without instances refuse, as their projections do.
+    async fn load_projection_instance(
+        &self,
+        _key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(crate::error::EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
 }
 
 #[async_trait]
@@ -1477,6 +1657,13 @@ impl<T: MaterializedStore + ?Sized> ProjectionStateReader for T {
     ) -> EngineResult<Option<Vec<u8>>> {
         MaterializedStore::get_message(self, project_id, message_id).await
     }
+
+    async fn load_projection_instance(
+        &self,
+        key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        MaterializedStore::get_instance(self, key).await
+    }
 }
 
 /// Processor checkpoint persistence used by startup, readiness, and rollback
@@ -1556,6 +1743,19 @@ impl<T: MaterializedStore + ?Sized> ProjectionCheckpointStore for T {
 /// User-facing run and event query port.
 #[async_trait]
 pub trait RunQueryStore: Send + Sync {
+    /// How many of a source run's native deliveries are still pending, up to
+    /// `limit`, or `None` when this store keeps no delivery projection. An
+    /// agent instance's messages all have its inbox as their source run, so
+    /// this is how many messages to one user wait to be delivered.
+    async fn pending_runtime_deliveries(
+        &self,
+        _project_id: &str,
+        _run_id: &str,
+        _limit: usize,
+    ) -> EngineResult<Option<usize>> {
+        Ok(None)
+    }
+
     /// One coherent, bounded hot projection cut for analytical queries.
     async fn capture_query_snapshot(
         &self,
@@ -1614,6 +1814,37 @@ pub trait RunQueryStore: Send + Sync {
 
 #[async_trait]
 impl<T: MaterializedStore + ?Sized> RunQueryStore for T {
+    async fn pending_runtime_deliveries(
+        &self,
+        project_id: &str,
+        run_id: &str,
+        limit: usize,
+    ) -> EngineResult<Option<usize>> {
+        let mut pending = 0;
+        let mut cursor: Option<Vec<u8>> = None;
+        loop {
+            let page = match MaterializedStore::scan_runtime_deliveries(
+                self,
+                project_id,
+                run_id,
+                cursor.as_deref(),
+                256,
+            )
+            .await
+            {
+                Ok(page) => page,
+                // A store without the delivery projection, or a scope it
+                // can't index, reads as unknown rather than as empty.
+                Err(_) => return Ok(None),
+            };
+            pending += page.items.iter().filter(|work| !work.terminal).count();
+            if pending >= limit || page.next_cursor.is_none() {
+                return Ok(Some(pending.min(limit)));
+            }
+            cursor = page.next_cursor;
+        }
+    }
+
     async fn capture_query_snapshot(
         &self,
         project_id: &str,
