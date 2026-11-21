@@ -6,6 +6,14 @@ change behavior or configuration, and its entry says how to upgrade.
 
 ## Unreleased
 
+### Changed
+
+- Agents declared `per="user"`, which keep one instance per user of an app,
+  need agent instances, which this runtime doesn't have. A worker serving one
+  is refused when it registers (`FAILED_PRECONDITION`, naming the agent)
+  instead of its calls running as plain runs, and the PostgreSQL and SQLite
+  stores refuse instance data.
+
 ## 0.1.0 - 2026-11-15
 
 The first release.

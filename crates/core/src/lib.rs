@@ -5,6 +5,8 @@ pub mod demand;
 pub mod dispatch_generation;
 pub mod error;
 pub mod experiment_feedback;
+pub mod instance;
+pub mod instance_placement;
 pub mod journal_contract;
 pub mod lease_fence;
 pub mod partition_offset;

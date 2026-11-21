@@ -234,6 +234,24 @@ async fn postgres_required_storage_port_contract() {
     .await;
 }
 
+// The open-source runtime keeps no always-on agent instances.
+#[tokio::test]
+#[ignore = "requires AGNT5_POSTGRES_TEST_URL or the local AGNT5 PostgreSQL container"]
+async fn postgres_refuses_agent_instances() {
+    let pool = test_pool().await;
+    PostgresStorage::migrate(&pool)
+        .await
+        .expect("migrate PostgreSQL runtime schema");
+    let storage = Arc::new(
+        PostgresStorage::from_pool(pool.clone(), format!("test-{}", Uuid::new_v4()))
+            .expect("test storage"),
+    );
+    let committer: Arc<dyn ProjectionCommitter> = storage.clone();
+    let ports =
+        engine_storage_conformance::RequiredStoragePorts::from_shared(storage.clone(), committer);
+    engine_storage_conformance::assert_agent_instances_unsupported(&ports, storage.as_ref()).await;
+}
+
 #[tokio::test]
 #[ignore = "requires AGNT5_POSTGRES_TEST_URL or the local AGNT5 PostgreSQL container"]
 async fn dedicated_writer_lock_enforces_one_active_runtime_per_namespace() {
