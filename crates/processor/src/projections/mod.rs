@@ -2,6 +2,7 @@ pub mod activations;
 pub mod approvals;
 pub mod batches;
 pub mod events;
+pub mod instances;
 pub mod jobs;
 pub mod messages;
 pub mod runs;

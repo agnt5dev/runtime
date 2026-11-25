@@ -719,7 +719,7 @@ message DispatchComponentResponse {
   //   - input.*      : HITL input (input.requested, input.provided)
   //   - progress.*   : Progress indicators (progress.update)
   //
-  // See docs/guide/reference/events.md for complete documentation
+  // See docs/reference/events.md for complete documentation
   // See platform/pkg/journal/types.go for Go constants
   // See sdk/sdk-python/src/agnt5/events.py for Python EventType enum
   string event_type = 8;         // Event type for SSE streaming (e.g., "lm.message.delta")

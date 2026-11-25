@@ -11,13 +11,12 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use engine_cache::{CacheConfig, RecordCache};
 use engine_core::storage_contract::{
-    DispatchOutboxStore, ProjectionCheckpointStore, ProjectionCommitter, ProjectionStateReader,
-    TerminalObligationStore,
+    DispatchOutboxStore, InstanceSupervisorStore, ProjectionCheckpointStore, ProjectionCommitter,
+    ProjectionStateReader, TerminalObligationStore,
 };
 use engine_core::traits::Segment;
 use engine_libsql::{LibsqlDatabase, LibsqlStorage, LibsqlWriterLease};
 use engine_postgres::{PostgresStorage, PostgresWriterLock};
-use engine_processor::timer_poller::{TimerPoller, TimerPollerConfig};
 use engine_processor::{run_single_partition_processor, PartitionProcessorExit};
 use engine_proto::engine_service_server::EngineServiceServer;
 use engine_service::in_process_engine::InProcessEngine;
@@ -70,6 +69,7 @@ trait RuntimeStorage:
     + ProjectionCheckpointStore
     + DispatchOutboxStore
     + TerminalObligationStore
+    + InstanceSupervisorStore
     + StorageHealth
     + Send
     + Sync
@@ -84,6 +84,7 @@ impl<T> RuntimeStorage for T where
         + ProjectionCheckpointStore
         + DispatchOutboxStore
         + TerminalObligationStore
+        + InstanceSupervisorStore
         + StorageHealth
         + Send
         + Sync
@@ -328,19 +329,7 @@ where
         cancel.child_token(),
     ));
 
-    let timer_poller = TimerPoller::new(
-        journal.clone(),
-        storage.clone(),
-        TimerPollerConfig::default(),
-    );
-    let timer_cancel = cancel.child_token();
-    tasks.spawn(async move {
-        timer_poller
-            .run(timer_cancel)
-            .await
-            .map_err(anyhow::Error::from)?;
-        Ok("timer poller")
-    });
+    // Timers are fired by the partition processor's own timer poller.
 
     let sweeper_cancel = cancel.child_token();
     let sweeper_journal = journal.clone();

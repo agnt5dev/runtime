@@ -520,6 +520,22 @@ fn validate_observed_batch(records: &[Record]) -> Result<(), Status> {
     Ok(())
 }
 
+/// Refuse a worker that serves an agent declared `per="user"`, on a runtime
+/// without agent instances.
+fn refuse_per_user_agents(components: &[engine_proto::ComponentInfo]) -> Result<(), Status> {
+    match components
+        .iter()
+        .find(|component| component.metadata.get("per").map(String::as_str) == Some("user"))
+    {
+        Some(agent) => Err(Status::failed_precondition(format!(
+            "agent {} is declared per=\"user\", which needs agent instances; this runtime \
+             doesn't support them",
+            agent.name
+        ))),
+        None => Ok(()),
+    }
+}
+
 fn negotiate_worker_session_protocols(
     request: &RegisterWorkerSessionRequest,
     _profile: runtime_common::durability::DurabilityProfile,
@@ -588,6 +604,8 @@ fn is_worker_owned_mutation(event_type: &str) -> bool {
             | "timer.scheduled"
             | "timer.canceled"
             | "workflow.state.changed"
+            | engine_core::instance::INSTANCE_FOLLOWUP_REQUESTED_EVENT
+            | engine_core::instance::INSTANCE_MESSAGE_REQUESTED_EVENT
     ) || event_type.ends_with(".started")
         || event_type.ends_with(".completed")
         || event_type.ends_with(".failed")
@@ -1758,6 +1776,56 @@ impl<S: Segment> EngineServiceImpl<S> {
         Err(Status::failed_precondition(format!(
             "worker lifecycle mutation rejected: {reason}"
         )))
+    }
+
+    /// Turn an instance run's follow-up request, already checked against the
+    /// worker's lease, into the follow-up's timer on the run's own inbox. The
+    /// inbox and the run template come from the run as projected, never from
+    /// the worker.
+    async fn resolve_followup_request(&self, record: &mut Record) -> Result<(), Status> {
+        if record.event_type != engine_core::instance::INSTANCE_FOLLOWUP_REQUESTED_EVENT {
+            return Ok(());
+        }
+        let run = self
+            .authoritative_completion_run(&record.project_id, &record.run_id, None)
+            .await?;
+        let timer = engine_core::instance::followup_timer_record(record, &run.metadata)
+            .map_err(|error| Status::invalid_argument(error.to_string()))?;
+        *record = timer;
+        Ok(())
+    }
+
+    /// Turn an instance run's message request, already checked against the
+    /// worker's lease, into the message on the run's own inbox. Refused while
+    /// as many of the instance's messages as an inbox may hold are still
+    /// waiting to be delivered, so a stuck destination can't pile them up.
+    async fn resolve_message_request(&self, record: &mut Record) -> Result<(), Status> {
+        if record.event_type != engine_core::instance::INSTANCE_MESSAGE_REQUESTED_EVENT {
+            return Ok(());
+        }
+        let run = self
+            .authoritative_completion_run(&record.project_id, &record.run_id, None)
+            .await?;
+        let message = engine_core::instance::message_record(record, &run.metadata)
+            .map_err(|error| Status::invalid_argument(error.to_string()))?;
+        if let Some(store) = &self.store {
+            let held = store
+                .pending_runtime_deliveries(
+                    &message.project_id,
+                    &message.run_id,
+                    engine_core::instance::MAX_HELD_MESSAGES,
+                )
+                .await
+                .map_err(engine_err_to_status)?;
+            if held.is_some_and(|held| held >= engine_core::instance::MAX_HELD_MESSAGES) {
+                return Err(Status::resource_exhausted(format!(
+                    "{} messages to this user are still waiting to be delivered",
+                    engine_core::instance::MAX_HELD_MESSAGES
+                )));
+            }
+        }
+        *record = message;
+        Ok(())
     }
 
     /// Verify that a worker-authored lifecycle record still belongs to the
@@ -3421,6 +3489,8 @@ impl<S: Segment> EngineService for EngineServiceImpl<S> {
         let run_lease_expiry = requests_run_lease_expiry(&record, runtime_authored);
         if !lease_fenced {
             self.validate_worker_mutation_authority(&mut record).await?;
+            self.resolve_followup_request(&mut record).await?;
+            self.resolve_message_request(&mut record).await?;
         }
         if successful_run_completion {
             self.reject_unsettled_required_children(&record.project_id, &record.run_id, None)
@@ -3663,6 +3733,8 @@ impl<S: Segment> EngineService for EngineServiceImpl<S> {
             }
             self.reject_unfenced_pull_terminal(expanded).await?;
             self.validate_worker_mutation_authority(expanded).await?;
+            self.resolve_followup_request(expanded).await?;
+            self.resolve_message_request(expanded).await?;
         }
         for (project_id, run_id) in successful_completion_runs {
             self.reject_unsettled_required_children(&project_id, &run_id, None)
@@ -4997,6 +5069,13 @@ impl<S: Segment> EngineService for EngineServiceImpl<S> {
         tracing::Span::current().record("project_id", tracing::field::display(&req.project_id));
         tracing::Span::current()
             .record("deployment_id", tracing::field::display(&req.deployment_id));
+
+        // Without the managed control plane there are no agent instances, so
+        // a per-user agent would run as plain runs, breaking its promise of
+        // one turn at a time per user. Refuse it where the worker can see why.
+        if !false {
+            refuse_per_user_agents(&req.components)?;
+        }
 
         let worker_id = req.worker_id.clone();
         let project_id = req.project_id.clone();
@@ -6905,6 +6984,34 @@ impl<S: Segment> EngineService for EngineServiceImpl<S> {
                 })
                 .collect(),
         }))
+    }
+}
+
+#[cfg(test)]
+mod per_user_agent_tests {
+    use super::refuse_per_user_agents;
+
+    fn agent(name: &str, per: Option<&str>) -> engine_proto::ComponentInfo {
+        let mut component = engine_proto::ComponentInfo {
+            name: name.to_string(),
+            ..Default::default()
+        };
+        if let Some(per) = per {
+            component
+                .metadata
+                .insert("per".to_string(), per.to_string());
+        }
+        component
+    }
+
+    #[test]
+    fn a_runtime_without_instances_refuses_a_per_user_agent() {
+        assert!(refuse_per_user_agents(&[agent("digest", None)]).is_ok());
+        let refused =
+            refuse_per_user_agents(&[agent("digest", None), agent("support", Some("user"))])
+                .unwrap_err();
+        assert_eq!(refused.code(), tonic::Code::FailedPrecondition);
+        assert!(refused.message().contains("support"));
     }
 }
 

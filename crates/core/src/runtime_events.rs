@@ -112,11 +112,11 @@ impl Configuration {
                 || subscription.revision == 0
                 || !ids.insert(&subscription.subscription_id)
                 || subscription.source.event_types.is_empty()
-                || subscription.source.event_types.len() > 3
+                || subscription.source.event_types.len() > 4
                 || subscription.source.event_types.iter().any(|kind| {
                     !matches!(
                         kind.as_str(),
-                        "run.completed" | "run.failed" | "run.cancelled"
+                        "run.completed" | "run.failed" | "run.cancelled" | MESSAGE_EVENT_TYPE
                     )
                 })
             {
@@ -232,6 +232,27 @@ pub struct Event {
     pub component_type: String,
     pub component_name: String,
     pub tenant_id: String,
+    /// What an agent instance sent its user, on a `message` event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<EventMessage>,
+}
+
+/// The event type of a message an agent instance sent its user.
+pub const MESSAGE_EVENT_TYPE: &str = "message";
+
+/// The body of a `message` event: what an agent instance sent, and to whom.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EventMessage {
+    /// Stable for the sending call: a retried or replayed `send` carries the
+    /// same id, so the app can drop a duplicate.
+    pub message_id: String,
+    /// The instance's inbox key, the customer's user id.
+    pub user_id: String,
+    pub conversation_id: String,
+    pub content: serde_json::Value,
+    /// The instance run that sent it.
+    pub sender_run_id: String,
 }
 
 /// Whether a Run belongs to another Run: it names a parent, or a root other
@@ -301,6 +322,60 @@ impl Event {
                 .get("tenant_id")
                 .cloned()
                 .unwrap_or_else(|| run.project_id.clone()),
+            message: None,
+        })
+    }
+
+    /// The `message` event for an `instance.message` record on an instance's
+    /// inbox. Its id comes from the message id, so the same message is one
+    /// event however often it is appended or replayed.
+    pub fn from_message(
+        config: &Configuration,
+        record: &crate::types::Record,
+        partition_id: u32,
+        offset: u64,
+    ) -> Option<Self> {
+        if record.event_type != crate::instance::INSTANCE_MESSAGE_EVENT
+            || record.project_id != config.project_id
+            || record.metadata.get("workspace_id").map(String::as_str)
+                != Some(config.workspace_id.as_str())
+        {
+            return None;
+        }
+        let identity = crate::instance_placement::parse_inbox_run_id(&record.run_id)?;
+        let body: crate::instance::StoredMessage = serde_json::from_slice(&record.data).ok()?;
+        let meta = |key: &str| record.metadata.get(key).cloned().unwrap_or_default();
+        Some(Self {
+            schema_version: "agnt5.runtime.event.v1".into(),
+            event_id: RuntimeWork::stable_id(&[
+                "runtime-message",
+                &config.namespace,
+                &config.project_id,
+                &body.message_id,
+            ]),
+            namespace: config.namespace.clone(),
+            project_id: config.project_id.clone(),
+            partition_id,
+            terminal_offset: offset,
+            run_id: record.run_id.clone(),
+            event_type: MESSAGE_EVENT_TYPE.into(),
+            occurred_at_ms: (record.timestamp_ns / 1_000_000).max(0),
+            deployment_id: meta("deployment_id"),
+            environment_id: Some(identity.environment_id().to_string()),
+            component_type: meta("component_type"),
+            component_name: identity.agent().to_string(),
+            tenant_id: record
+                .metadata
+                .get("tenant_id")
+                .cloned()
+                .unwrap_or_else(|| record.project_id.clone()),
+            message: Some(EventMessage {
+                message_id: body.message_id,
+                user_id: identity.inbox_key().to_string(),
+                conversation_id: body.conversation_id,
+                content: body.content,
+                sender_run_id: body.sender_run_id,
+            }),
         })
     }
 
@@ -358,6 +433,112 @@ mod tests {
             ..Default::default()
         }
     }
+    // An instance run's `send` becomes one message on its inbox, and that one
+    // message event, whose id follows the message, for its subscriptions.
+    #[test]
+    fn a_runs_send_becomes_one_message_event_on_its_instance() {
+        use crate::instance::{message_id, message_record, INSTANCE_MESSAGE_REQUESTED_EVENT};
+        use crate::instance_placement::{inbox_run_id, instance_run_id, InstanceIdentity};
+        let identity = InstanceIdentity::new("project", "env-1", "support", "u_1", 1).unwrap();
+        let inbox = inbox_run_id(&identity, 0, 1).unwrap();
+        let run_id = instance_run_id(&identity, 0, 0, 1).unwrap();
+        let request = crate::types::Record {
+            offset: crate::types::Offset::ZERO,
+            project_id: "project".into(),
+            run_id: run_id.clone(),
+            event_type: INSTANCE_MESSAGE_REQUESTED_EVENT.into(),
+            data: serde_json::to_vec(&serde_json::json!({
+                "message_key": "send-1.ab12",
+                "conversation_id": "pr-42",
+                "content": {"text": "Your PR has a review"},
+                "event_id": "envelope-fields-are-ignored",
+            }))
+            .unwrap()
+            .into(),
+            timestamp_ns: 5_000_000,
+            step_key: None,
+            correlation_id: None,
+            parent_event_id: None,
+            metadata: [("deployment_id".to_string(), "forged".to_string())].into(),
+            data_type: "json".into(),
+            data_checksum: None,
+            data_compressed: false,
+        };
+        let run_metadata = std::collections::HashMap::from([
+            (
+                crate::instance::META_INSTANCE_INBOX_RUN_ID.to_string(),
+                inbox.clone(),
+            ),
+            ("deployment_id".to_string(), "dep-1".to_string()),
+            ("workspace_id".to_string(), "workspace".to_string()),
+        ]);
+        let message = message_record(&request, &run_metadata).unwrap();
+        assert_eq!(message.run_id, inbox);
+        crate::journal_contract::validate_append_records(std::slice::from_ref(&message)).unwrap();
+        // A replayed send has the same idempotency slot and fingerprint.
+        let again = message_record(&request, &run_metadata).unwrap();
+        assert_eq!(
+            crate::journal_contract::record_idempotency_key(&message),
+            crate::journal_contract::record_idempotency_key(&again)
+        );
+        assert!(crate::journal_contract::record_idempotency_key(&message).is_some());
+        assert_eq!(
+            crate::journal_contract::record_idempotency_validation_fingerprint(&message),
+            crate::journal_contract::record_idempotency_validation_fingerprint(&again)
+        );
+
+        let event = Event::from_message(&config(), &message, 0, 7).unwrap();
+        assert_eq!(event.event_type, MESSAGE_EVENT_TYPE);
+        assert_eq!(event.run_id, inbox);
+        assert_eq!(event.deployment_id, "dep-1");
+        assert_eq!(event.component_name, "support");
+        let body = event.message.as_ref().unwrap();
+        assert_eq!(body.message_id, message_id(&run_id, "send-1.ab12"));
+        assert_eq!(body.user_id, "u_1");
+        assert_eq!(body.conversation_id, "pr-42");
+        assert_eq!(body.sender_run_id, run_id);
+        // The same message at another offset is the same event.
+        assert_eq!(
+            Event::from_message(&config(), &message, 0, 99)
+                .unwrap()
+                .event_id,
+            event.event_id
+        );
+        // A subscription may select messages.
+        let mut configured = config();
+        configured.subscriptions.push(Subscription {
+            subscription_id: "app-webhook".into(),
+            revision: 1,
+            enabled: true,
+            source: SourceSelector {
+                event_types: vec![MESSAGE_EVENT_TYPE.into()],
+                environment_id: None,
+                deployment_id: None,
+                component_name: None,
+                tenant_id: None,
+            },
+            destination: NativeDestination {
+                component_type: "webhook".into(),
+                deployment_id: String::new(),
+                component_name: String::new(),
+                online_eval: None,
+                webhook: Some(WebhookDestination {
+                    url: "https://app.example.com/agnt5".into(),
+                    signing_secret_ref: "app-webhook-key".into(),
+                    max_attempts: 5,
+                }),
+            },
+        });
+        configured.validate().unwrap();
+        assert!(event.matches(&configured.subscriptions[0]));
+        // Another workspace's message is not this configuration's.
+        let mut other = message.clone();
+        other
+            .metadata
+            .insert("workspace_id".into(), "elsewhere".into());
+        assert!(Event::from_message(&config(), &other, 0, 7).is_none());
+    }
+
     #[test]
     fn identity_survives_owner_changes_and_configuration_edits() {
         let first = Event::from_terminal(&config(), &run(), "run.completed", 3, 10, 1).unwrap();

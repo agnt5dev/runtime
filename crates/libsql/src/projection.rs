@@ -91,6 +91,19 @@ impl ProjectionCommitter for LibsqlStorage {
 
         for mutation in commit.mutations() {
             match mutation {
+                ProjectionMutation::PutInstance { .. }
+                | ProjectionMutation::PutInstanceObligation { .. }
+                | ProjectionMutation::DeleteInstanceObligation { .. }
+                | ProjectionMutation::PutInboxItemContent { .. }
+                | ProjectionMutation::DeleteInboxItemContent { .. }
+                | ProjectionMutation::PutInstanceResumeRequest { .. }
+                | ProjectionMutation::DeleteInstanceResumeRequest { .. } => {
+                    // Always-on agent instances need the managed runtime;
+                    // the gateway refuses them here before any is written.
+                    return Err(EngineError::InvalidArgument(
+                        "this runtime does not support always-on agent instances".into(),
+                    ));
+                }
                 ProjectionMutation::PutRun(data) => {
                     crate::db::query(
                         r#"

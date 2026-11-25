@@ -15,7 +15,7 @@ those bookkeeping records inside `CompleteJob` so a simple function costs
 `PollJob` plus `CompleteJob`.
 
 Worked sequences for each run shape, including the cases that do not bundle,
-are in `docs/runtime/pull-lifecycle-bundling-scenarios.md`.
+are in `docs/contracts/pull-lifecycle-bundling-scenarios.md`.
 
 ## Negotiation
 

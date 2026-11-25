@@ -6,7 +6,9 @@
 
 mod required_ports;
 
-pub use required_ports::{assert_required_storage_port_contract, RequiredStoragePorts};
+pub use required_ports::{
+    assert_agent_instances_unsupported, assert_required_storage_port_contract, RequiredStoragePorts,
+};
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
