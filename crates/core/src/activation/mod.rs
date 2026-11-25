@@ -732,6 +732,30 @@ pub fn lease_loss_failures(
     )
 }
 
+/// Error code on the failure written for a step still running when an
+/// operator stopped the agent instance that owns its run.
+pub const INSTANCE_STOPPED_ERROR_CODE: &str = "INSTANCE_STOPPED";
+
+/// Failures that settle every attempt still active when an instance's leader
+/// holds a run for an operator stop, appended in the hold's batch, before it.
+///
+/// The hold ends the attempt's lease, so those attempts can never complete,
+/// and the attempt that continues the run after the lift would wait on them.
+/// As for a lost lease, each failure is retryable with an unknown external
+/// outcome, so the activation's recovery policy decides what the next attempt
+/// does.
+pub fn stop_failures(
+    states: &[ActivationState],
+    timestamp_ns: i64,
+) -> Result<Vec<crate::types::Record>, ActivationError> {
+    open_attempt_failures(
+        states,
+        INSTANCE_STOPPED_ERROR_CODE,
+        "an operator stopped the agent instance while this attempt was running",
+        timestamp_ns,
+    )
+}
+
 /// Error code on the failure written for a step still running when its run
 /// suspended and released the lease the step was running under.
 pub const SUSPENDED_WHILE_ACTIVE_ERROR_CODE: &str = "SUSPENDED_WHILE_ACTIVE";

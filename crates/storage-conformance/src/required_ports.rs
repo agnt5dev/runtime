@@ -5,9 +5,10 @@ use bytes::Bytes;
 use engine_core::demand::DemandKey;
 use engine_core::storage_contract::{
     DemandPendingStore, DispatchOutboxScanEntry, DispatchOutboxStore, EntityStateWriteStore,
-    JournalPosition, LeaseWorkStore, PendingWorkStore, ProjectionCheckpointStore, ProjectionCommit,
-    ProjectionCommitter, ProjectionMutation, ProjectionSource, ProjectionStateReader,
-    QueueQueryStore, RunQueryStore, SessionQueryStore, TimerWorkStore, WorkflowQueryStore,
+    InstanceSupervisorStore, JournalPosition, LeaseWorkStore, PendingWorkStore,
+    ProjectionCheckpointStore, ProjectionCommit, ProjectionCommitter, ProjectionMutation,
+    ProjectionSource, ProjectionStateReader, QueueQueryStore, RunQueryStore, SessionQueryStore,
+    TimerWorkStore, WorkflowQueryStore,
 };
 use engine_core::types::{Offset, Record};
 use engine_proto::{ComponentType, Priority};
@@ -77,6 +78,87 @@ where
     durable_work_contract(&create).await;
     demand_pending_contract(&create).await;
     query_cursor_contract(&create).await;
+}
+
+/// An adapter without always-on agent instances refuses every instance
+/// mutation, writes nothing else of a commit that carries one, and refuses
+/// instance reads, so the instance supervisor never runs on it.
+pub async fn assert_agent_instances_unsupported(
+    ports: &RequiredStoragePorts,
+    supervisor: &dyn InstanceSupervisorStore,
+) {
+    let key = engine_core::instance::InstanceKey {
+        project_id: "instances".to_string(),
+        environment_id: "env".to_string(),
+        agent_name: "support".to_string(),
+        inbox_key: "u_1".to_string(),
+    };
+    let mutations = [
+        ProjectionMutation::PutInstance {
+            key: key.clone(),
+            data: b"{}".to_vec(),
+        },
+        ProjectionMutation::PutInstanceObligation {
+            partition_id: 0,
+            key: key.clone(),
+            data: b"{}".to_vec(),
+        },
+        ProjectionMutation::DeleteInstanceObligation {
+            partition_id: 0,
+            key: key.clone(),
+        },
+        ProjectionMutation::PutInboxItemContent {
+            key: key.clone(),
+            item_id: "item".to_string(),
+            data: b"{}".to_vec(),
+        },
+        ProjectionMutation::DeleteInboxItemContent {
+            key: key.clone(),
+            item_id: "item".to_string(),
+        },
+        ProjectionMutation::PutInstanceResumeRequest {
+            key: key.clone(),
+            data: b"{}".to_vec(),
+        },
+        ProjectionMutation::DeleteInstanceResumeRequest { key: key.clone() },
+    ];
+    for (index, mutation) in mutations.into_iter().enumerate() {
+        let run_id = format!("instance-run-{index}");
+        let refused = ports
+            .committer
+            .commit(commit(
+                "instances",
+                &run_id,
+                index as u64,
+                1,
+                vec![ProjectionMutation::PutRun(b"run".to_vec()), mutation],
+            ))
+            .await;
+        assert!(
+            refused.is_err(),
+            "instance mutation {index} must be refused"
+        );
+        assert_eq!(
+            ports
+                .projection_state
+                .load_projection_run("instances", &run_id)
+                .await
+                .expect("load run after a refused commit"),
+            None,
+            "a refused commit writes nothing"
+        );
+    }
+    assert!(!supervisor.supports_instances());
+    assert!(ports
+        .projection_state
+        .load_projection_instance(&key)
+        .await
+        .is_err());
+    assert!(supervisor.load_instance(&key).await.is_err());
+    assert!(supervisor
+        .scan_instance_obligations(0, 10, None)
+        .await
+        .is_err());
 }
 
 fn record(project_id: &str, run_id: &str, offset: u64, timestamp_ns: i64) -> Record {

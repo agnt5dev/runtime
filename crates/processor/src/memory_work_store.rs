@@ -247,6 +247,10 @@ impl DispatchOutboxStore for MemoryWorkStore {
     }
 }
 
+/// Keeps no agent instances, like the open-source stores.
+#[async_trait]
+impl engine_core::storage_contract::InstanceSupervisorStore for MemoryWorkStore {}
+
 #[async_trait]
 impl TimerWorkStore for MemoryWorkStore {
     async fn scan_due_timers(&self, now_ns: i64, limit: usize) -> EngineResult<Vec<Vec<u8>>> {

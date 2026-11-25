@@ -5,6 +5,7 @@
 //! and processes events idempotently (replay-safe).
 
 pub mod dispatch_outbox_drain;
+pub mod instance_supervisor;
 pub mod lag_clock;
 #[cfg(test)]
 mod memory_work_store;
@@ -366,6 +367,9 @@ pub struct ProcessedRecord {
     terminal_event_accepted: bool,
     cache_journal_record: bool,
     dispatch_outbox_inserted: bool,
+    /// Whether this record left an always-on agent instance needing a
+    /// decision, which wakes the partition's instance supervisor.
+    instance_obligation_put: bool,
     dirty_demand_keys: Vec<DemandKey>,
     removed_pending_run: Option<(DemandKey, RemovedPendingRun)>,
     /// Model usage for control-plane analytics, attributed through the
@@ -377,6 +381,11 @@ impl ProcessedRecord {
     /// Whether this record wrote a push-dispatch outbox entry.
     pub fn dispatch_outbox_inserted(&self) -> bool {
         self.dispatch_outbox_inserted
+    }
+
+    /// Whether this record left an instance needing its leader's decision.
+    pub fn instance_obligation_put(&self) -> bool {
+        self.instance_obligation_put
     }
 }
 
@@ -727,8 +736,25 @@ impl<S: Segment, M: MaterializedStore> Processor<S, M> {
         // worker.registered/heartbeat/deregistered no longer
         // produce projection ops — gossip is the routing source of record.
 
+        // A refused instance start is a no-op for the run, as in the
+        // production path.
+        let instance_start = crate::projections::instances::check_decision_on_apply(
+            self.store.as_ref(),
+            record,
+            engine_core::partition_offset::decode_offset(record.offset).0 as u32,
+            existing_run.as_deref(),
+        )
+        .await?;
+        let instance_start_refused = instance_start
+            .as_ref()
+            .is_some_and(|applied| !applied.accepted());
+
         // Collect ops from all projections
-        let run_result = runs::project(record, existing_run.as_deref());
+        let run_result = if instance_start_refused {
+            crate::projections::ProjectionResult { ops: Vec::new() }
+        } else {
+            runs::project(record, existing_run.as_deref())
+        };
         let activation_result = activations::project(record, existing_activation.as_deref())?;
         let mut state_ops = state::project(record);
         state_ops.extend(
@@ -751,6 +777,17 @@ impl<S: Segment, M: MaterializedStore> Processor<S, M> {
         let session_ops = sessions::project(record, existing_session.as_deref());
         let message_ops = messages::project(record, existing_message.as_deref());
         let event_ops = events::project(record);
+        let mut instance_ops = crate::projections::instances::project_record(
+            self.store.as_ref(),
+            record,
+            engine_core::partition_offset::decode_offset(record.offset).0 as u32,
+            existing_run.as_deref(),
+            &run_result,
+        )
+        .await?;
+        if let Some(applied) = instance_start {
+            instance_ops.extend(applied.ops);
+        }
 
         // Dispatch all store operations
         for op in run_result
@@ -766,6 +803,7 @@ impl<S: Segment, M: MaterializedStore> Processor<S, M> {
             .chain(session_ops.iter())
             .chain(message_ops.iter())
             .chain(event_ops.iter())
+            .chain(instance_ops.iter())
         {
             self.dispatch_op(op, journal_record).await?;
         }
@@ -1100,6 +1138,13 @@ impl<S: Segment, M: MaterializedStore> Processor<S, M> {
             StoreOp::PutRuntimeWork(_)
             | StoreOp::PutTerminalObligation { .. }
             | StoreOp::DeleteTerminalObligation { .. }
+            | StoreOp::PutInstance { .. }
+            | StoreOp::PutInstanceObligation { .. }
+            | StoreOp::DeleteInstanceObligation { .. }
+            | StoreOp::PutInboxItemContent { .. }
+            | StoreOp::DeleteInboxItemContent { .. }
+            | StoreOp::PutInstanceResumeRequest { .. }
+            | StoreOp::DeleteInstanceResumeRequest { .. }
             | StoreOp::PutDispatchOutbox { .. }
             | StoreOp::DeleteDispatchOutbox { .. }
             | StoreOp::PutRunArchiveIntent { .. }
@@ -1202,6 +1247,8 @@ where
         + ProjectionCheckpointStore
         + DispatchOutboxStore
         + TerminalObligationStore
+        + engine_core::storage_contract::InstanceSupervisorStore
+        + engine_core::storage_contract::TimerWorkStore
         + 'static,
 {
     let checkpoint_key = "processor-partition-0".to_string();
@@ -1342,7 +1389,12 @@ pub async fn run_partition_processor_attempt_with_ports<R, C, D>(
 where
     R: ProjectionStateReader + ?Sized + 'static,
     C: ProjectionCheckpointStore + ?Sized + 'static,
-    D: DispatchOutboxStore + TerminalObligationStore + ?Sized + 'static,
+    D: DispatchOutboxStore
+        + TerminalObligationStore
+        + engine_core::storage_contract::InstanceSupervisorStore
+        + engine_core::storage_contract::TimerWorkStore
+        + ?Sized
+        + 'static,
 {
     info!(partition_id, node_id = %node_id, checkpoint_key = %checkpoint_key, "Partition processor starting");
 
@@ -1458,11 +1510,22 @@ where
         None
     };
 
+    // Woken after a record leaves an always-on agent instance needing its
+    // leader's decision; its sweep repairs a missed wake.
+    let instance_supervisor_wake = Arc::new(tokio::sync::Notify::new());
+
     // Keep terminal recovery in the same supervised processor attempt as the
     // projection and dispatch drainer. It cannot act until replay is complete,
-    // and it is cancelled before a failed attempt relinquishes ownership.
+    // and it is cancelled before a failed attempt relinquishes ownership. The
+    // instance supervisor and the timer poller share its task, so they are
+    // gated, cancelled and failed the same way.
     let mut terminal_supervisor = if let Some(seg) = segment.clone() {
         let store_for_supervisor = dispatch_outbox_store.clone();
+        let store_for_instances = dispatch_outbox_store.clone();
+        let seg_for_instances = seg.clone();
+        let node_id_for_instances = node_id.clone();
+        let replay_ready_for_instances = replay_ready_rx.clone();
+        let wake_for_instances = instance_supervisor_wake.clone();
         let cancel_for_supervisor = cancel.child_token();
         let cancel_for_task = cancel_for_supervisor.clone();
         let node_id_for_supervisor = node_id.clone();
@@ -1470,18 +1533,49 @@ where
             let (_tx, rx) = tokio::sync::watch::channel(true);
             rx
         });
+        let is_leader_for_instances = is_leader_rx_for_supervisor.clone();
+        let cancel_for_instances = cancel_for_task.clone();
+        let store_for_timers = dispatch_outbox_store.clone();
+        let seg_for_timers = seg.clone();
+        let node_id_for_timers = node_id.clone();
+        let replay_ready_for_timers = replay_ready_rx.clone();
+        let is_leader_for_timers = is_leader_rx_for_supervisor.clone();
+        let cancel_for_timers = cancel_for_task.clone();
         let handle = tokio::spawn(async move {
-            crate::terminal_supervisor::run_partition_terminal_supervisor(
-                partition_id,
-                node_id_for_supervisor,
-                store_for_supervisor,
-                seg,
-                replay_ready_rx,
-                is_leader_rx_for_supervisor,
-                cancel_for_task,
-                crate::terminal_supervisor::TerminalSupervisorConfig::default(),
-            )
-            .await;
+            tokio::join!(
+                crate::terminal_supervisor::run_partition_terminal_supervisor(
+                    partition_id,
+                    node_id_for_supervisor,
+                    store_for_supervisor,
+                    seg,
+                    replay_ready_rx,
+                    is_leader_rx_for_supervisor,
+                    cancel_for_task,
+                    crate::terminal_supervisor::TerminalSupervisorConfig::default(),
+                ),
+                crate::instance_supervisor::run_partition_instance_supervisor(
+                    partition_id,
+                    node_id_for_instances,
+                    store_for_instances,
+                    seg_for_instances,
+                    replay_ready_for_instances,
+                    is_leader_for_instances,
+                    wake_for_instances,
+                    cancel_for_instances,
+                    crate::instance_supervisor::InstanceSupervisorConfig::default(),
+                ),
+                // Only this partition's leader fires its timers (ADR-006).
+                crate::timer_poller::run_partition_timer_poller(
+                    partition_id,
+                    node_id_for_timers,
+                    store_for_timers,
+                    seg_for_timers,
+                    replay_ready_for_timers,
+                    is_leader_for_timers,
+                    cancel_for_timers,
+                    crate::timer_poller::TimerPollerConfig::default(),
+                ),
+            );
         });
         Some(AttemptBackgroundTask {
             cancel: cancel_for_supervisor,
@@ -1697,6 +1791,9 @@ where
                         // signals and rows recovered after restart.
                         if processed.dispatch_outbox_inserted {
                             dispatch_outbox_notify.notify_one();
+                        }
+                        if processed.instance_obligation_put {
+                            instance_supervisor_wake.notify_one();
                         }
 
                         // The request-local append path can only wake parked
@@ -2421,10 +2518,26 @@ pub async fn process_record_standalone_with_checkpoint<R: ProjectionStateReader 
         read_existing_start,
     );
 
+    // A supervisor's start for an always-on agent instance takes effect only if
+    // the instance can still take it as the record is applied. A refused start
+    // is a no-op for the run: no projection, no dispatch.
+    let instance_start = crate::projections::instances::check_decision_on_apply(
+        store,
+        record,
+        partition_id,
+        existing_run.as_deref(),
+    )
+    .await?;
+    let instance_start_refused = instance_start
+        .as_ref()
+        .is_some_and(|applied| !applied.accepted());
+
     // Orchestrator decisions use pre-projection run state for replay-safe
     // deduplication. Dispatch decisions are materialized as durable outbox
     // rows; retry decisions still append a new run.queued from the leader.
-    let orchestration_action = if dispatch_outbox_enabled || side_effect_segment.is_some() {
+    let orchestration_action = if instance_start_refused {
+        None
+    } else if dispatch_outbox_enabled || side_effect_segment.is_some() {
         let action = crate::orchestrator::evaluate(record, existing_run.as_deref());
         crate::orchestrator::log_action(&action);
         Some(action)
@@ -2439,7 +2552,11 @@ pub async fn process_record_standalone_with_checkpoint<R: ProjectionStateReader 
         record_processor_op_counts, record_processor_stage_duration, time_projection,
     };
     let project_start = std::time::Instant::now();
-    let run_result = time_projection("runs", || runs::project(record, existing_run.as_deref()));
+    let run_result = if instance_start_refused {
+        crate::projections::ProjectionResult { ops: Vec::new() }
+    } else {
+        time_projection("runs", || runs::project(record, existing_run.as_deref()))
+    };
     let activation_result = time_projection("activations", || {
         activations::project(record, existing_activation.as_deref())
     })?;
@@ -2468,6 +2585,22 @@ pub async fn process_record_standalone_with_checkpoint<R: ProjectionStateReader 
         messages::project(record, existing_message.as_deref())
     });
     let event_ops = time_projection("events", || events::project(record));
+    // The instance's record and obligation commit with the record that
+    // changes them: an item, a stop or lift, or an instance-owned run ending.
+    let mut instance_ops = crate::projections::instances::project_record(
+        store,
+        record,
+        partition_id,
+        existing_run.as_deref(),
+        &run_result,
+    )
+    .await?;
+    if let Some(applied) = instance_start {
+        instance_ops.extend(applied.ops);
+    }
+    let instance_obligation_put = instance_ops
+        .iter()
+        .any(|op| matches!(op, StoreOp::PutInstanceObligation { .. }));
     record_processor_stage_duration(&record.event_type, "project", project_start);
 
     // Every projection op for this record commits in one atomic RocksDB
@@ -2615,6 +2748,7 @@ pub async fn process_record_standalone_with_checkpoint<R: ProjectionStateReader 
             + session_ops.len()
             + message_ops.len()
             + event_ops.len()
+            + instance_ops.len()
             + orchestration_ops.len(),
     );
     all_ops.extend(run_result.ops);
@@ -2628,6 +2762,7 @@ pub async fn process_record_standalone_with_checkpoint<R: ProjectionStateReader 
     all_ops.extend(session_ops);
     all_ops.extend(message_ops);
     all_ops.extend(event_ops);
+    all_ops.extend(instance_ops);
     all_ops.extend(orchestration_ops);
 
     let dirty_demand_keys = dirty_demand_keys(record, &all_ops)?;
@@ -2669,6 +2804,7 @@ pub async fn process_record_standalone_with_checkpoint<R: ProjectionStateReader 
         ),
         cache_journal_record: true,
         dispatch_outbox_inserted,
+        instance_obligation_put,
         dirty_demand_keys,
         removed_pending_run,
         llm_event,
@@ -2726,10 +2862,13 @@ pub async fn process_record_standalone_with_checkpoint<R: ProjectionStateReader 
         None => {}
     }
 
-    if let (Some(seg), Some(resume_record)) = (
+    if let (Some(seg), Some(mut resume_record)) = (
         side_effect_segment,
         build_timer_resume_record(record, existing_run.as_deref(), existing_timer.as_deref()),
     ) {
+        // An always-on agent instance's run is resumed by its supervisor; the
+        // timer firing only records the request.
+        engine_core::instance::defer_instance_resume(&mut resume_record);
         append_processor_side_effect(seg, resume_record)
             .await
             .map_err(|error| {
@@ -2827,15 +2966,24 @@ async fn runtime_event_capture<R: ProjectionStateReader + ?Sized>(
         runtime_events::{Configuration, Event, MatchIntent},
         runtime_work::{RuntimeWork, WorkKind},
     };
-    if !is_terminal_event(record) {
+    // An agent instance's message is an event as a run's ending is: matched
+    // against the project's subscriptions, which deliver it.
+    let message = record.event_type == engine_core::instance::INSTANCE_MESSAGE_EVENT;
+    if !message && !is_terminal_event(record) {
         return Ok(vec![]);
     }
     // A duplicate or rejected lifecycle record has no new Run projection.
-    let Some(bytes) = result.run_data() else {
-        return Ok(vec![]);
+    let run = if message {
+        None
+    } else {
+        let Some(bytes) = result.run_data() else {
+            return Ok(vec![]);
+        };
+        Some(
+            engine_proto::Run::decode(bytes)
+                .map_err(|error| EngineError::Storage(error.to_string()))?,
+        )
     };
-    let run = engine_proto::Run::decode(bytes)
-        .map_err(|error| EngineError::Storage(error.to_string()))?;
     let Some(head) = store
         .load_projection_event_configuration(partition_id, &record.project_id)
         .await?
@@ -2848,14 +2996,18 @@ async fn runtime_event_capture<R: ProjectionStateReader + ?Sized>(
     let configuration: Configuration = serde_json::from_value(head.payload)
         .map_err(|error| EngineError::Storage(error.to_string()))?;
     let (_, terminal_offset) = engine_core::partition_offset::decode_offset(record.offset);
-    let Some(event) = Event::from_terminal(
-        &configuration,
-        &run,
-        &record.event_type,
-        partition_id,
-        terminal_offset,
-        record.timestamp_ns,
-    ) else {
+    let event = match &run {
+        Some(run) => Event::from_terminal(
+            &configuration,
+            run,
+            &record.event_type,
+            partition_id,
+            terminal_offset,
+            record.timestamp_ns,
+        ),
+        None => Event::from_message(&configuration, record, partition_id, terminal_offset),
+    };
+    let Some(event) = event else {
         return Ok(vec![]);
     };
     let work = RuntimeWork {

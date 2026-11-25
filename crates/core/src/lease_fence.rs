@@ -136,6 +136,10 @@ pub enum LeaseExpiryReason {
     Timeout,
     /// The owning worker session disconnected. No clock comparison.
     WorkerDisconnect,
+    /// An operator stopped the agent instance that owns the run. Its leader
+    /// holds the run with a `run.paused` that ends the attempt's lease. No
+    /// clock comparison.
+    OperatorStop,
 }
 
 impl LeaseExpiryReason {
@@ -143,6 +147,7 @@ impl LeaseExpiryReason {
         match self {
             Self::Timeout => "timeout",
             Self::WorkerDisconnect => "worker_disconnect",
+            Self::OperatorStop => "operator_stop",
         }
     }
 
@@ -150,6 +155,7 @@ impl LeaseExpiryReason {
         match value {
             "timeout" => Some(Self::Timeout),
             "worker_disconnect" => Some(Self::WorkerDisconnect),
+            "operator_stop" => Some(Self::OperatorStop),
             _ => None,
         }
     }
@@ -268,6 +274,11 @@ pub fn lease_fence(record: &Record) -> EngineResult<Option<LeaseFence>> {
             record.event_type.as_str(),
             "run.completed" | "run.failed" | "run.paused" | "workflow.paused"
         ),
+        // An operator stop holds the run rather than retrying or failing it,
+        // so it fences a pause, and only a pause.
+        LeaseFenceKind::LeaseExpiry if expiry_reason == Some(LeaseExpiryReason::OperatorStop) => {
+            record.event_type == "run.paused"
+        }
         LeaseFenceKind::LeaseExpiry => {
             matches!(
                 record.event_type.as_str(),
@@ -453,6 +464,23 @@ mod tests {
             .insert("lease_expires_at_ms".to_string(), "5000".to_string());
         assert_eq!(renewed_lease_expiry(&renewed), Some(5000));
         assert!(lease_fence(&renewed).unwrap().is_some());
+
+        // An operator stop fences a pause, and nothing else; no other expiry
+        // fences a pause.
+        let mut stop = fence(LeaseFenceKind::LeaseExpiry);
+        stop.expiry_reason = Some(LeaseExpiryReason::OperatorStop);
+        let mut hold = record("run.paused");
+        stop.stamp(&mut hold);
+        assert_eq!(
+            lease_fence(&hold).unwrap().unwrap().expiry_reason,
+            Some(LeaseExpiryReason::OperatorStop)
+        );
+        let mut stopped_expiry = record(RUN_LEASE_EXPIRED_EVENT);
+        stop.stamp(&mut stopped_expiry);
+        assert!(lease_fence(&stopped_expiry).is_err());
+        let mut timed_out_pause = record("run.paused");
+        fence(LeaseFenceKind::LeaseExpiry).stamp(&mut timed_out_pause);
+        assert!(lease_fence(&timed_out_pause).is_err());
     }
 
     #[test]

@@ -1260,6 +1260,18 @@ pub trait MaterializedStore: Send + Sync + 'static {
     ) -> EngineResult<Vec<Vec<u8>>>;
     async fn list_due_timers(&self, now_ns: i64, limit: usize) -> EngineResult<Vec<Vec<u8>>>;
 
+    /// One partition's due timers, oldest first, or `None` when this store
+    /// keeps no per-partition due index (the caller then filters the global
+    /// one).
+    async fn list_due_timers_for_partition(
+        &self,
+        _partition_id: u32,
+        _now_ns: i64,
+        _limit: usize,
+    ) -> EngineResult<Option<Vec<Vec<u8>>>> {
+        Ok(None)
+    }
+
     // --- Jobs ---
 
     async fn get_job(&self, project_id: &str, job_id: &str) -> EngineResult<Option<Vec<u8>>>;
@@ -1507,6 +1519,55 @@ pub trait MaterializedStore: Send + Sync + 'static {
 
     async fn get_batch(&self, project_id: &str, batch_id: &str) -> EngineResult<Option<Vec<u8>>>;
     async fn put_batch(&self, project_id: &str, batch_id: &str, data: &[u8]) -> EngineResult<()>;
+
+    // --- Always-on agent instances ---
+
+    /// The instance's record. Stores without instances (the open-source
+    /// runtime) refuse, so an instance can never be projected there by
+    /// accident.
+    async fn get_instance(
+        &self,
+        _key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+
+    /// Scan one partition's instance obligations in key order, after
+    /// `start_after`. Each entry is an instance whose leader must decide what
+    /// it does next, with the obligation's data.
+    async fn list_instance_obligations(
+        &self,
+        _partition_id: u32,
+        _limit: usize,
+        _start_after: Option<&crate::instance::InstanceKey>,
+    ) -> EngineResult<Vec<(crate::instance::InstanceKey, Vec<u8>)>> {
+        Err(EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+
+    /// The pending request to resume the instance's active run.
+    async fn get_instance_resume_request(
+        &self,
+        _key: &crate::instance::InstanceKey,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
+
+    /// A waiting item's content, kept beside its instance until a run takes it.
+    async fn get_inbox_item_content(
+        &self,
+        _key: &crate::instance::InstanceKey,
+        _item_id: &str,
+    ) -> EngineResult<Option<Vec<u8>>> {
+        Err(EngineError::InvalidArgument(
+            "this runtime does not support always-on agent instances".into(),
+        ))
+    }
 
     // --- Sessions ---
 

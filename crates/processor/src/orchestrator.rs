@@ -531,6 +531,15 @@ pub(crate) fn hydrate_dispatch_source_record(
                 .entry(META_CONTINUATION_B64.to_string())
                 .or_insert_with(|| continuation.clone());
         }
+        // The lift of an instance's held run carries no answer: its new
+        // attempt starts from the run's own input, as a retry does.
+        let lift = hydrated
+            .metadata
+            .get(engine_core::instance::META_INSTANCE_RESUME_LIFT)
+            .is_some_and(|value| value == "true");
+        if lift && hydrated.data.is_empty() && !run.input_data.is_empty() {
+            hydrated.data = Bytes::from(run.input_data);
+        }
         return hydrated;
     }
 
@@ -888,6 +897,9 @@ pub fn build_retry_record(
     // attempt's cause. The projection keeps the run's own history across the
     // retry.
     run_state_machine::strip_runtime_lease_loss_metadata(&mut metadata);
+    // A retry is the same run continuing, not a new start decision for its
+    // instance; only the instance supervisor marks a start.
+    metadata.remove(engine_core::instance::META_INSTANCE_DECISION);
     let mut input_data = Bytes::new();
 
     if let Some(bytes) = existing_run {
@@ -912,6 +924,19 @@ pub fn build_retry_record(
                 metadata
                     .entry("deployment_id".to_string())
                     .or_insert(run.deployment_id);
+            }
+            // An instance's run keeps its instance across retries. A worker's
+            // failure needn't echo the association, and apply_queued rebuilds
+            // the run's metadata from this record, so the run's own copy wins.
+            for key in [
+                engine_core::instance::META_INSTANCE_INBOX_RUN_ID,
+                engine_core::instance::META_INSTANCE_SEQUENCE,
+                engine_core::instance::META_INSTANCE_ITEM_IDS,
+            ] {
+                match run.metadata.get(key) {
+                    Some(value) => metadata.insert(key.to_string(), value.clone()),
+                    None => metadata.remove(key),
+                };
             }
             // Preserve W3C trace context so the retried run stays on the same
             // trace as the original gateway-initiated execution.
@@ -1974,6 +1999,78 @@ mod tests {
             assert!(!metadata.contains_key(key), "dispatch kept {key}");
             assert!(!retry.metadata.contains_key(key), "retry record kept {key}");
         }
+    }
+
+    #[test]
+    fn a_pushed_lift_is_sent_the_runs_own_input() {
+        let run = Run {
+            run_id: "61676e35-0100-8000-8000-000000000001".to_string(),
+            input_data: br#"{"conversation_id":"api","inbox_items":[]}"#.to_vec(),
+            ..Default::default()
+        };
+        let existing = run.encode_to_vec();
+        let mut lift = make_record("run.resumed", HashMap::new());
+        lift.metadata.insert(
+            engine_core::instance::META_INSTANCE_RESUME_LIFT.to_string(),
+            "true".to_string(),
+        );
+        let hydrated = hydrate_dispatch_source_record(&lift, Some(&existing));
+        assert_eq!(hydrated.data.as_ref(), run.input_data.as_slice());
+        // An answer's resume keeps its answer.
+        let mut answer = make_record_with_data(
+            "run.resumed",
+            HashMap::new(),
+            Bytes::from_static(b"{\"ok\":true}"),
+        );
+        answer.metadata.clear();
+        let hydrated = hydrate_dispatch_source_record(&answer, Some(&existing));
+        assert_eq!(hydrated.data.as_ref(), b"{\"ok\":true}");
+    }
+
+    #[test]
+    fn a_retry_keeps_its_runs_instance_without_the_worker_echoing_it() {
+        let mut run = Run {
+            run_id: "61676e35-0100-8000-8000-000000000001".to_string(),
+            component_name: "support".to_string(),
+            ..Default::default()
+        };
+        for (key, value) in [
+            (
+                engine_core::instance::META_INSTANCE_INBOX_RUN_ID,
+                "inbox::p::e::support::u::1::0",
+            ),
+            (engine_core::instance::META_INSTANCE_SEQUENCE, "3"),
+            (engine_core::instance::META_INSTANCE_ITEM_IDS, "item-1"),
+            (engine_core::instance::META_INSTANCE_DECISION, "start"),
+        ] {
+            run.metadata.insert(key.to_string(), value.to_string());
+        }
+        // A pull worker's failure carries only what it chose to send.
+        let mut failed_meta = HashMap::new();
+        failed_meta.insert("attempt".to_string(), "0".to_string());
+        failed_meta.insert(
+            engine_core::instance::META_INSTANCE_INBOX_RUN_ID.to_string(),
+            "inbox::forged".to_string(),
+        );
+        let failed = make_record("run.failed", failed_meta);
+        let retry = build_retry_record(&failed, Some(&run.encode_to_vec()), 1, 3);
+        assert_eq!(
+            retry
+                .metadata
+                .get(engine_core::instance::META_INSTANCE_INBOX_RUN_ID)
+                .map(String::as_str),
+            Some("inbox::p::e::support::u::1::0")
+        );
+        assert_eq!(
+            retry
+                .metadata
+                .get(engine_core::instance::META_INSTANCE_ITEM_IDS)
+                .map(String::as_str),
+            Some("item-1")
+        );
+        assert!(!retry
+            .metadata
+            .contains_key(engine_core::instance::META_INSTANCE_DECISION));
     }
 
     #[test]
